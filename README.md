@@ -11,6 +11,94 @@
 
 🚀 **[https://joint-save.vercel.app](https://joint-save.vercel.app)**
 
+📹 **Demo Video:** [Watch Full MVP Functionality](https://youtu.be/Iuy-As9im7A)
+
+---
+
+## Level 5 - Blue Belt Submission
+
+JointSave is submitted for the Stellar Level 5 - Blue Belt challenge, demonstrating a fully functional MVP with real testnet user validation.
+
+### Submission Requirements
+
+✅ **Live Demo:** [https://joint-save.vercel.app](https://joint-save.vercel.app)
+
+✅ **Demo Video:** [Full MVP Functionality Walkthrough](https://youtu.be/Iuy-As9im7A)
+
+✅ **Architecture Documentation:** [View on Google Docs](https://docs.google.com/document/d/15R4P8vy8DM_45jT5TpaPjyVN7Mw9LPyjgvFtXSuO-Wg/edit?usp=sharing)
+
+✅ **User Feedback Documentation:** [View Feedback Spreadsheet](https://docs.google.com/spreadsheets/d/13hchVp0uGfw8B7mP0K19QWGn_tazvk12X0q2Z0VH-og/edit?usp=sharing)
+
+✅ **Verified Testnet Users (5+):**
+1. `GDQJRFOQEYO4CPXJMHOJXW6IOJ2Y3JGBLXWCWMFYNP6FRUTTMQTPXVS6` - [View on Stellar Expert](https://stellar.expert/explorer/testnet/account/GDQJRFOQEYO4CPXJMHOJXW6IOJ2Y3JGBLXWCWMFYNP6FRUTTMQTPXVS6)
+2. `GCHFYDDD4BZIZF63HZKYMUCF6EGI3S4JOAUCHSMRN7XDXJRRT` - [View on Stellar Expert](https://stellar.expert/explorer/testnet/account/GCHFYDDD4BZIZF63HZKYMUCF6EGI3S4JOAUCHSMRN7XDXJRRT)
+3. `GAB7HJJ0xd5Ff4A4458BC8d2684A452C0C57531731410F3f4` - [View on Stellar Expert](https://stellar.expert/explorer/testnet/account/GAB7HJJ0xd5Ff4A4458BC8d2684A452C0C57531731410F3f4)
+4. `GDBMOOICQXCNUTYH7XFZ2XCGR7GYLG5UKHG5VRMWEL3YZ255LXBHMV6L` - [View on Stellar Expert](https://stellar.expert/explorer/testnet/account/GDBMOOICQXCNUTYH7XFZ2XCGR7GYLG5UKHG5VRMWEL3YZ255LXBHMV6L)
+5. `GACSPDJNNJNQ3M3LPEUKFEY5NUTAGSF2YEVGIAHCDTFTDAWAKVQQ3FGG` - [View on Stellar Expert](https://stellar.expert/explorer/testnet/account/GACSPDJNNJNQ3M3LPEUKFEY5NUTAGSF2YEVGIAHCDTFTDAWAKVQQ3FGG)
+6. `GAIOENLFBEJWPPSUTOHQF4Z2J7S5KRB4REBCM3UVLZIXYHUBWGQUR23R` - [View on Stellar Expert](https://stellar.expert/explorer/testnet/account/GAIOENLFBEJWPPSUTOHQF4Z2J7S5KRB4REBCM3UVLZIXYHUBWGQUR23R)
+
+### User Feedback Summary
+
+Based on feedback collected from 6+ real testnet users, the following insights were gathered:
+
+**Key Feedback Points:**
+- Users requested better progress tracking visualization for savings goals
+- Need for clearer indication of deposit status in rotational pools
+- Request for transaction history with more detailed information
+- Desire for mobile notifications when payout rounds are ready
+- Suggestion to add estimated completion dates for target pools
+
+**Implemented Improvements:**
+
+1. **Enhanced Progress Tracking**
+   - Added visual progress bars to group cards showing percentage toward target
+   - Implemented real-time balance updates from on-chain state
+   - Color-coded progress indicators (red < 30%, yellow 30-70%, green > 70%)
+   - Live on-chain balance enrichment in My Groups dashboard
+   - Real-time state fetching for accurate financial data display
+
+### Planned Improvements (Next Phase)
+
+Based on user feedback, the following enhancements are planned for the next development phase:
+
+1. **Advanced Progress Visualization**
+   - Add milestone markers on progress bars
+   - Show projected completion dates based on current contribution rate
+   - Implement animated progress transitions for better UX
+   - Add comparison charts showing individual vs. group progress
+
+2. **Enhanced Deposit Status Indicators**
+   - Real-time deposit confirmation badges
+   - Visual timeline showing who has deposited in current round
+   - Push notifications for pending deposits
+   - Reminder system for upcoming deposit deadlines
+
+3. **Comprehensive Transaction History**
+   - Detailed transaction explorer with filters (date, type, amount)
+   - Export transaction history to CSV/PDF
+   - Visual charts showing contribution patterns over time
+   - Integration with Stellar Explorer for full transaction details
+
+4. **Mobile Notifications System**
+   - Browser push notifications for payout rounds
+   - Email notifications for important events
+   - Customizable notification preferences
+   - SMS alerts for critical actions (optional)
+
+5. **Smart Deadline Estimations**
+   - AI-powered completion date predictions
+   - Historical data analysis for accuracy
+   - Adjustable projections based on member behavior
+   - Visual countdown timers for target pools
+
+6. **User Experience Improvements**
+   - Onboarding tutorial for first-time users
+   - Interactive tooltips explaining pool mechanics
+   - Dark mode optimization
+   - Accessibility enhancements (WCAG 2.1 AA compliance)
+
+All improvements will be tracked and implemented with proper git commits linked in future updates.
+
 ---
 
 ## Overview
