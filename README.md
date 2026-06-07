@@ -165,12 +165,7 @@ JointSave demonstrates several advanced Soroban patterns:
 
 <div align="center">
 
-### Mobile Experience
-![Mobile Landing](docs/mobile-screeshot-landing.png)
-*Mobile-optimized landing page*
 
-![Mobile Group View](docs/mobile-screenshot-group.png)
-*Group management on mobile*
 
 ### Desktop Features
 ![CI/CD Pipeline](docs/ci-screenshot.png)
