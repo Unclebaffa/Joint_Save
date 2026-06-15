@@ -82,6 +82,8 @@ All contracts are deployed on **Stellar Testnet**:
 
 *Deployed on April 16, 2026*
 
+For complete API documentation — functions, events, storage keys, error conditions, and CLI examples — see **[docs/contract-api.md](docs/contract-api.md)**.
+
 ## Getting Started
 
 ### Prerequisites
