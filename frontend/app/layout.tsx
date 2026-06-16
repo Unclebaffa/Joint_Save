@@ -1,3 +1,4 @@
+import { Toaster } from "@/components/ui/toaster"
 import type React from "react"
 import type { Metadata } from "next"
 import { GeistSans } from "geist/font/sans"
@@ -41,6 +42,7 @@ export default function RootLayout({
           <Web3Provider>{children}</Web3Provider>
         </Suspense>
         <Analytics />
+        <Toaster />
       </body>
     </html>
   )
