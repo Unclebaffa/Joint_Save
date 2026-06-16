@@ -3,10 +3,18 @@
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination"
 import { Users, TrendingUp, Calendar, ArrowRight, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { motion } from "framer-motion"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useStellar } from "@/components/web3-provider"
 import {
   fetchRotationalState,
@@ -14,6 +22,8 @@ import {
   fetchFlexibleState,
   stroopsToXlm,
 } from "@/hooks/useJointSaveContracts"
+
+const PAGE_SIZE = 6
 
 interface Pool {
   id: string
@@ -96,29 +106,43 @@ async function fetchLiveBalance(pool: Pool): Promise<{ totalSaved: number; progr
 
 export function MyGroups({ onCreateClick }: MyGroupsProps) {
   const { address } = useStellar()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+
   const [pools, setPools] = useState<PoolWithLive[]>([])
+  const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
 
+  const page = Math.max(0, parseInt(searchParams.get("page") || "0", 10))
+  const totalPages = Math.ceil(total / PAGE_SIZE)
+
+  const setPage = useCallback((p: number) => {
+    const params = new URLSearchParams(searchParams.toString())
+    params.set("page", String(p))
+    router.push(`?${params.toString()}`, { scroll: false })
+  }, [router, searchParams])
+
   useEffect(() => {
     if (!address) { setLoading(false); return }
-    loadPools()
-  }, [address])
+    loadPools(page)
+  }, [address, page])
 
-  const loadPools = async () => {
+  const loadPools = async (currentPage: number) => {
     try {
       setLoading(true)
       setError("")
-      const res = await fetch(`/api/pools?creator=${address?.toLowerCase()}`)
+      const res = await fetch(`/api/pools?creator=${address?.toLowerCase()}&page=${currentPage}`)
       if (!res.ok) throw new Error("Failed to fetch pools")
-      const data: Pool[] = await res.json()
-      const base = Array.isArray(data) ? data : []
+      const json = await res.json()
+      const base: Pool[] = Array.isArray(json) ? json : (json.data ?? [])
+      setTotal(json.total ?? base.length)
 
-      // Set DB data immediately so UI renders fast
+      // Render DB data immediately
       setPools(base)
       setLoading(false)
 
-      // Then enrich with live on-chain balances in parallel
+      // Enrich with live on-chain state (only current page — max 6 RPC calls)
       const enriched = await Promise.all(
         base.map(async (pool) => {
           const live = await fetchLiveBalance(pool)
@@ -159,7 +183,7 @@ export function MyGroups({ onCreateClick }: MyGroupsProps) {
         <div>
           <h2 className="text-3xl font-bold">My Groups</h2>
           <p className="text-muted-foreground mt-1">
-            {pools.length === 0 ? "Manage your savings circles" : `${pools.length} active group${pools.length !== 1 ? "s" : ""}`}
+            {total === 0 ? "Manage your savings circles" : `${total} active group${total !== 1 ? "s" : ""}`}
           </p>
         </div>
       </motion.div>
@@ -180,9 +204,10 @@ export function MyGroups({ onCreateClick }: MyGroupsProps) {
           </Card>
         </motion.div>
       ) : (
-        <motion.div variants={container} initial="hidden" animate="show"
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {pools.map((pool) => {
+        <>
+          <motion.div variants={container} initial="hidden" animate="show"
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {pools.map((pool) => {
             const totalSaved = pool.liveTotalSaved ?? pool.total_saved ?? 0
             const progress = pool.liveProgress ?? pool.progress ?? 0
             return (
@@ -246,6 +271,33 @@ export function MyGroups({ onCreateClick }: MyGroupsProps) {
             )
           })}
         </motion.div>
+
+          {totalPages > 1 && (
+            <div className="flex flex-col items-center gap-3 mt-4">
+              <p className="text-sm text-muted-foreground">
+                Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total} pools
+              </p>
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      onClick={() => setPage(page - 1)}
+                      aria-disabled={page === 0}
+                      className={page === 0 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                    />
+                  </PaginationItem>
+                  <PaginationItem>
+                    <PaginationNext
+                      onClick={() => setPage(page + 1)}
+                      aria-disabled={page >= totalPages - 1}
+                      className={page >= totalPages - 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
+          )}
+        </>
       )}
     </div>
   )
