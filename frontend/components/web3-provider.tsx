@@ -35,6 +35,7 @@ export const STELLAR_NETWORK_PASSPHRASE =
 interface StellarContextValue {
   kit: StellarWalletsKit | null
   address: string | null
+  walletId: string | null
   isConnected: boolean
   connect: () => Promise<void>
   disconnect: () => void
@@ -43,6 +44,7 @@ interface StellarContextValue {
 const StellarContext = createContext<StellarContextValue>({
   kit: null,
   address: null,
+  walletId: null,
   isConnected: false,
   connect: async () => {},
   disconnect: () => {},
@@ -57,6 +59,7 @@ export function useStellar() {
 export function Web3Provider({ children }: { children: ReactNode }) {
   const [kit, setKit] = useState<StellarWalletsKit | null>(null)
   const [address, setAddress] = useState<string | null>(null)
+  const [walletId, setWalletId] = useState<string | null>(null)
 
   // Initialise the kit once on the client
   useEffect(() => {
@@ -72,9 +75,10 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     })
     setKit(walletKit)
 
-    // Restore session if previously connected
-    const saved = localStorage.getItem("jointsave_address")
-    if (saved) setAddress(saved)
+    const savedAddress = localStorage.getItem("jointsave_address")
+    const savedWalletId = localStorage.getItem("jointsave_wallet_id")
+    if (savedAddress) setAddress(savedAddress)
+    if (savedWalletId) setWalletId(savedWalletId)
   }, [])
 
   const connect = useCallback(async () => {
@@ -84,21 +88,29 @@ export function Web3Provider({ children }: { children: ReactNode }) {
         kit.setWallet(option.id)
         const { address: addr } = await kit.getAddress()
         setAddress(addr)
+        setWalletId(option.id)
         localStorage.setItem("jointsave_address", addr)
+        localStorage.setItem("jointsave_wallet_id", option.id)
       },
     })
   }, [kit])
 
   const disconnect = useCallback(() => {
+    if (kit) {
+      kit.disconnect().catch(() => {})
+    }
     setAddress(null)
+    setWalletId(null)
     localStorage.removeItem("jointsave_address")
-  }, [])
+    localStorage.removeItem("jointsave_wallet_id")
+  }, [kit])
 
   return (
     <StellarContext.Provider
       value={{
         kit,
         address,
+        walletId,
         isConnected: !!address,
         connect,
         disconnect,

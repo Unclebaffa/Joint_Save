@@ -37,6 +37,12 @@ chmod +x scripts/deploy.sh
 
 Copy the output contract IDs into your frontend `.env`.
 
+## API Reference
+
+Full API reference for all four contracts — functions, events, storage keys, error conditions, and CLI examples:
+
+**[docs/contract-api.md](../docs/contract-api.md)**
+
 ## Network
 
 - **Testnet RPC:** `https://soroban-testnet.stellar.org`
