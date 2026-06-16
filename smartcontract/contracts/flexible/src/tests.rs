@@ -44,3 +44,52 @@ fn test_minimum_deposit_rejection() {
     // Try depositing 5 (which is less than 10)
     client.deposit(&member_a, &5i128);
 }
+
+#[test]
+fn test_withdrawal_fee_deduction() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, FlexiblePool);
+    let client = FlexiblePoolClient::new(&env, &contract_id);
+
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let token_address = token_contract.address();
+    let token_client = token::StellarAssetClient::new(&env, &token_address);
+    let token_interface_client = token::Client::new(&env, &token_address);
+
+    let treasury = Address::generate(&env);
+    let member_a = Address::generate(&env);
+    let member_b = Address::generate(&env);
+
+    let mut members = Vec::new(&env);
+    members.push_back(member_a.clone());
+    members.push_back(member_b.clone());
+
+    // Minimum deposit = 10, withdrawal_fee_bps = 200 (2%)
+    client.initialize(
+        &token_address,
+        &members,
+        &10i128,
+        &200u32,
+        &false,
+        &treasury,
+        &0u32,
+    );
+
+    token_client.mint(&member_a, &1000i128);
+
+    client.deposit(&member_a, &1000i128);
+    assert_eq!(client.balance_of(&member_a), 1000);
+
+    // Withdraw 500
+    client.withdraw(&member_a, &500i128);
+
+    // Fee = 500 * 2% = 10. Net payout = 490.
+    assert_eq!(token_interface_client.balance(&member_a), 490);
+    assert_eq!(token_interface_client.balance(&treasury), 10);
+    assert_eq!(client.balance_of(&member_a), 500);
+    assert_eq!(client.total_balance(), 500);
+}
+
