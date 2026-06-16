@@ -163,3 +163,7 @@ impl TargetPool {
         false
     }
 }
+
+#[cfg(test)]
+mod tests;
+
