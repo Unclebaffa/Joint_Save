@@ -231,6 +231,10 @@ impl FlexiblePool {
             .unwrap_or(false)
     }
 
+    pub fn admin(env: Env) -> Address {
+        env.storage().persistent().get(&DataKey::Admin).unwrap()
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────
 
     fn is_member(members: &Vec<Address>, who: &Address) -> bool {

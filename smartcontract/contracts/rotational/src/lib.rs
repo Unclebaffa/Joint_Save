@@ -231,6 +231,10 @@ impl RotationalPool {
             .unwrap_or(false)
     }
 
+    pub fn admin(env: Env) -> Address {
+        env.storage().persistent().get(&DataKey::Admin).unwrap()
+    }
+
     pub fn current_round(env: Env) -> u32 {
         env.storage()
             .persistent()

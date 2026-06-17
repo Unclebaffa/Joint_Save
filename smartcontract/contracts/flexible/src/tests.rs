@@ -296,6 +296,85 @@ fn test_emergency_withdraw_drains_contract() {
 }
 
 #[test]
+#[should_panic(expected = "not admin")]
+fn test_non_admin_pause_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, FlexiblePool);
+    let client = FlexiblePoolClient::new(&env, &contract_id);
+
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let token_address = token_contract.address();
+
+    let treasury = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let non_admin = Address::generate(&env);
+    let member_a = Address::generate(&env);
+    let member_b = Address::generate(&env);
+
+    let mut members = Vec::new(&env);
+    members.push_back(member_a.clone());
+    members.push_back(member_b.clone());
+
+    client.initialize(
+        &token_address,
+        &admin,
+        &members,
+        &10i128,
+        &0u32,
+        &false,
+        &treasury,
+        &0u32,
+    );
+
+    // non_admin is a different address — stored admin check must reject it
+    client.pause(&non_admin);
+}
+
+#[test]
+#[should_panic(expected = "not admin")]
+fn test_non_admin_emergency_withdraw_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, FlexiblePool);
+    let client = FlexiblePoolClient::new(&env, &contract_id);
+
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let token_address = token_contract.address();
+
+    let treasury = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let non_admin = Address::generate(&env);
+    let member_a = Address::generate(&env);
+    let member_b = Address::generate(&env);
+    let recipient = Address::generate(&env);
+
+    let mut members = Vec::new(&env);
+    members.push_back(member_a.clone());
+    members.push_back(member_b.clone());
+
+    client.initialize(
+        &token_address,
+        &admin,
+        &members,
+        &10i128,
+        &0u32,
+        &false,
+        &treasury,
+        &0u32,
+    );
+
+    // Pause with the real admin first so the paused check passes,
+    // proving it is the admin check (not the paused check) that fires.
+    client.pause(&admin);
+    client.emergency_withdraw(&non_admin, &recipient);
+}
+
+#[test]
 #[should_panic(expected = "pool not paused")]
 fn test_emergency_withdraw_requires_paused() {
     let env = Env::default();

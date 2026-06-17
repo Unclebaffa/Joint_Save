@@ -9,7 +9,7 @@ import { GroupActions } from "@/components/group/group-actions"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
-import { fetchIsPaused } from "@/hooks/useJointSaveContracts"
+import { fetchIsPaused, fetchPoolAdmin } from "@/hooks/useJointSaveContracts"
 
 interface Pool {
   id: string
@@ -26,6 +26,7 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
   const [pool, setPool] = useState<Pool | null>(null)
   const [loading, setLoading] = useState(true)
   const [isPaused, setIsPaused] = useState(false)
+  const [poolAdmin, setPoolAdmin] = useState<string | null>(null)
 
   useEffect(() => {
     fetch(`/api/pools?id=${id}`)
@@ -40,15 +41,19 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
       })
   }, [id])
 
-  const refreshPauseState = useCallback(async () => {
+  const refreshPoolState = useCallback(async () => {
     if (!pool || isPendingAddress(pool.contract_address)) return
     try {
-      const paused = await fetchIsPaused(pool.contract_address)
+      const [paused, admin] = await Promise.all([
+        fetchIsPaused(pool.contract_address),
+        fetchPoolAdmin(pool.contract_address),
+      ])
       setIsPaused(paused)
+      setPoolAdmin(admin)
     } catch {}
   }, [pool])
 
-  useEffect(() => { refreshPauseState() }, [refreshPauseState])
+  useEffect(() => { refreshPoolState() }, [refreshPoolState])
 
   if (loading) return <div>Loading...</div>
   if (!pool) return <div>Pool not found</div>
@@ -76,7 +81,8 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
               poolType={pool.type}
               tokenAddress={pool.token_address}
               isPaused={isPaused}
-              onPauseChange={refreshPauseState}
+              poolAdmin={poolAdmin}
+              onPauseChange={refreshPoolState}
             />
             <GroupMembers groupId={id} />
           </div>

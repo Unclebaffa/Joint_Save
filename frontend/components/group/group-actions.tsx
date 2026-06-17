@@ -13,6 +13,7 @@ import {
   useFlexibleDeposit, useFlexibleWithdraw,
   usePausePool, useUnpausePool,
 } from "@/hooks/useJointSaveContracts"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 interface GroupActionsProps {
   groupId: string
@@ -20,6 +21,7 @@ interface GroupActionsProps {
   poolType: "rotational" | "target" | "flexible"
   tokenAddress: string
   isPaused?: boolean
+  poolAdmin?: string | null
   onPauseChange?: () => void
 }
 
@@ -36,8 +38,9 @@ async function logActivity(poolId: string, type: string, userAddress: string, am
   } catch {}
 }
 
-export function GroupActions({ groupId, poolAddress, poolType, isPaused = false, onPauseChange }: GroupActionsProps) {
+export function GroupActions({ groupId, poolAddress, poolType, isPaused = false, poolAdmin = null, onPauseChange }: GroupActionsProps) {
   const { address } = useStellar()
+  const isAdmin = !!address && !!poolAdmin && address.toUpperCase() === poolAdmin.toUpperCase()
   const [depositAmount, setDepositAmount] = useState("")
   const [withdrawAmount, setWithdrawAmount] = useState("")
   const [error, setError] = useState("")
@@ -256,22 +259,47 @@ export function GroupActions({ groupId, poolAddress, poolType, isPaused = false,
         {!isPending && (
           <div className="border-t border-border pt-6 space-y-3">
             <p className="text-xs text-muted-foreground font-medium">Admin Controls</p>
-            <p className="text-xs text-muted-foreground">
-              Only the pool admin can pause or unpause. Pausing disables all deposits and withdrawals.
-            </p>
+            {!isAdmin && (
+              <p className="text-xs text-muted-foreground">
+                Only the pool admin can pause or unpause this pool.
+              </p>
+            )}
             <div className="flex gap-2">
-              <Button variant="outline" className="flex-1 bg-transparent text-destructive border-destructive/50 hover:bg-destructive/10"
-                onClick={handlePause} disabled={pausePool.isLoading || !address || isPending || isPaused}>
-                {pausePool.isLoading
-                  ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Pausing...</>
-                  : <><ShieldOff className="mr-2 h-4 w-4" />Pause Pool</>}
-              </Button>
-              <Button variant="outline" className="flex-1 bg-transparent text-green-600 border-green-600/50 hover:bg-green-600/10"
-                onClick={handleUnpause} disabled={unpausePool.isLoading || !address || isPending || !isPaused}>
-                {unpausePool.isLoading
-                  ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Unpausing...</>
-                  : <><ShieldCheck className="mr-2 h-4 w-4" />Unpause Pool</>}
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="flex-1">
+                    <Button variant="outline" className="w-full bg-transparent text-destructive border-destructive/50 hover:bg-destructive/10 disabled:opacity-50"
+                      onClick={handlePause} disabled={pausePool.isLoading || !address || isPaused || !isAdmin}>
+                      {pausePool.isLoading
+                        ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Pausing...</>
+                        : <><ShieldOff className="mr-2 h-4 w-4" />Pause Pool</>}
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {!isAdmin && (
+                  <TooltipContent>
+                    {!address ? "Connect your wallet to manage this pool" : "Your wallet is not the pool admin"}
+                  </TooltipContent>
+                )}
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="flex-1">
+                    <Button variant="outline" className="w-full bg-transparent text-green-600 border-green-600/50 hover:bg-green-600/10 disabled:opacity-50"
+                      onClick={handleUnpause} disabled={unpausePool.isLoading || !address || !isPaused || !isAdmin}>
+                      {unpausePool.isLoading
+                        ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Unpausing...</>
+                        : <><ShieldCheck className="mr-2 h-4 w-4" />Unpause Pool</>}
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {!isAdmin && (
+                  <TooltipContent>
+                    {!address ? "Connect your wallet to manage this pool" : "Your wallet is not the pool admin"}
+                  </TooltipContent>
+                )}
+              </Tooltip>
             </div>
           </div>
         )}

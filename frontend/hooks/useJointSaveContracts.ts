@@ -707,6 +707,15 @@ export async function fetchIsPaused(contractId: string): Promise<boolean> {
   }
 }
 
+export async function fetchPoolAdmin(contractId: string): Promise<string | null> {
+  try {
+    const val = await viewCall(contractId, "admin")
+    return val.switch().name === "scvAddress" ? Address.fromScVal(val).toString() : null
+  } catch {
+    return null
+  }
+}
+
 // ── Pause / Unpause hooks ─────────────────────────────────────────────────────
 
 export function usePausePool(contractId: string) {

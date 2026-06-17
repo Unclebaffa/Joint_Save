@@ -494,6 +494,87 @@ fn test_pause_unpause_deposit_cycle() {
 }
 
 #[test]
+#[should_panic(expected = "not admin")]
+fn test_non_admin_pause_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, RotationalPool);
+    let client = RotationalPoolClient::new(&env, &contract_id);
+
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let token_address = token_contract.address();
+
+    let treasury = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let non_admin = Address::generate(&env);
+    let member_a = Address::generate(&env);
+    let member_b = Address::generate(&env);
+
+    let mut members = Vec::new(&env);
+    members.push_back(member_a.clone());
+    members.push_back(member_b.clone());
+
+    client.initialize(
+        &token_address,
+        &admin,
+        &members,
+        &100i128,
+        &100u64,
+        &0u32,
+        &0u32,
+        &treasury,
+    );
+
+    client.pause(&non_admin);
+}
+
+#[test]
+#[should_panic(expected = "not admin")]
+fn test_non_admin_emergency_withdraw_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, RotationalPool);
+    let client = RotationalPoolClient::new(&env, &contract_id);
+
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let token_address = token_contract.address();
+    let token_client = token::StellarAssetClient::new(&env, &token_address);
+
+    let treasury = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let non_admin = Address::generate(&env);
+    let member_a = Address::generate(&env);
+    let member_b = Address::generate(&env);
+    let recipient = Address::generate(&env);
+
+    let mut members = Vec::new(&env);
+    members.push_back(member_a.clone());
+    members.push_back(member_b.clone());
+
+    client.initialize(
+        &token_address,
+        &admin,
+        &members,
+        &100i128,
+        &100u64,
+        &0u32,
+        &0u32,
+        &treasury,
+    );
+
+    token_client.mint(&member_a, &100i128);
+    client.deposit(&member_a);
+
+    // Pause with real admin first so the paused check passes
+    client.pause(&admin);
+    client.emergency_withdraw(&non_admin, &recipient);
+}
+
+#[test]
 fn test_emergency_withdraw_drains_contract() {
     let env = Env::default();
     env.mock_all_auths();
