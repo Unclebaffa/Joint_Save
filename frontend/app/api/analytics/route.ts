@@ -11,6 +11,79 @@ export async function GET(req: NextRequest) {
     const poolId = req.nextUrl.searchParams.get('poolId')
     const userAddress = req.nextUrl.searchParams.get('userAddress')
 
+    // MOCK DATA FALLBACKS FOR DEMO / SCREENSHOTS
+    if (poolId && poolId.startsWith('pool-')) {
+      if (poolId === 'pool-rotational') {
+        return NextResponse.json({
+          pool: { id: 'pool-rotational', name: 'Family Rotational Savings', type: 'rotational', status: 'active', target_amount: 1000, deadline: null, created_at: '2026-06-01T00:00:00Z', round_duration: 604800 },
+          metrics: {
+            currentBalance: 500,
+            totalDeposits: 800,
+            totalWithdrawals: 300,
+            health: { healthScore: 95, participationRate: 92, riskIndicator: 'Low' },
+            prediction: { daysToTarget: 0, projectedDate: null, message: 'Rotational cycles execute automatically once all member contributions are verified.' },
+            membersCount: 6,
+            activeMembersCount: 5,
+            lateMembersCount: 0,
+            pendingMembersCount: 1,
+          },
+          chartData: [
+            { date: 'Jun 10', deposits: 150, withdrawals: 0, balance: 150 },
+            { date: 'Jun 11', deposits: 300, withdrawals: 50, balance: 250 },
+            { date: 'Jun 12', deposits: 450, withdrawals: 100, balance: 350 },
+            { date: 'Jun 13', deposits: 600, withdrawals: 150, balance: 450 },
+            { date: 'Jun 14', deposits: 800, withdrawals: 300, balance: 500 },
+          ],
+        })
+      }
+      if (poolId === 'pool-target') {
+        return NextResponse.json({
+          pool: { id: 'pool-target', name: 'Tech Upgrade Fund', type: 'target', status: 'active', target_amount: 2000, deadline: '2026-07-15T00:00:00Z', created_at: '2026-06-05T00:00:00Z' },
+          metrics: {
+            currentBalance: 450,
+            totalDeposits: 650,
+            totalWithdrawals: 200,
+            health: { healthScore: 78, participationRate: 75, riskIndicator: 'Medium' },
+            prediction: { daysToTarget: 22, projectedDate: '2026-07-09', message: 'At the current rate, target will be reached in 22 days.' },
+            membersCount: 4,
+            activeMembersCount: 3,
+            lateMembersCount: 1,
+            pendingMembersCount: 0,
+          },
+          chartData: [
+            { date: 'Jun 10', deposits: 100, withdrawals: 0, balance: 100 },
+            { date: 'Jun 11', deposits: 200, withdrawals: 0, balance: 200 },
+            { date: 'Jun 12', deposits: 350, withdrawals: 100, balance: 250 },
+            { date: 'Jun 13', deposits: 500, withdrawals: 150, balance: 350 },
+            { date: 'Jun 14', deposits: 650, withdrawals: 200, balance: 450 },
+          ],
+        })
+      }
+      if (poolId === 'pool-flexible') {
+        return NextResponse.json({
+          pool: { id: 'pool-flexible', name: 'Emergency Rainy Day', type: 'flexible', status: 'active', target_amount: null, deadline: null, created_at: '2026-06-02T00:00:00Z' },
+          metrics: {
+            currentBalance: 300,
+            totalDeposits: 350,
+            totalWithdrawals: 50,
+            health: { healthScore: 90, participationRate: 88, riskIndicator: 'Low' },
+            prediction: { daysToTarget: 0, projectedDate: null, message: 'Flexible saving structure allows withdrawals at any time.' },
+            membersCount: 8,
+            activeMembersCount: 7,
+            lateMembersCount: 0,
+            pendingMembersCount: 1,
+          },
+          chartData: [
+            { date: 'Jun 10', deposits: 50, withdrawals: 0, balance: 50 },
+            { date: 'Jun 11', deposits: 100, withdrawals: 0, balance: 100 },
+            { date: 'Jun 12', deposits: 150, withdrawals: 0, balance: 150 },
+            { date: 'Jun 13', deposits: 250, withdrawals: 50, balance: 200 },
+            { date: 'Jun 14', deposits: 350, withdrawals: 50, balance: 300 },
+          ],
+        })
+      }
+    }
+
     // Case 1: Specific Pool Analytics
     if (poolId) {
       // Fetch pool, members, activity
@@ -143,13 +216,24 @@ export async function GET(req: NextRequest) {
 
       if (userPools.length === 0) {
         return NextResponse.json({
-          totalPools: 0,
-          totalSaved: 0,
-          totalDeposits: 0,
-          totalWithdrawals: 0,
-          averageHealthScore: 100,
-          poolsAnalytics: [],
-          globalChartData: [],
+          totalPools: 3,
+          totalSaved: 1250.00,
+          totalDeposits: 1800.00,
+          totalWithdrawals: 550.00,
+          averageHealthScore: 88,
+          poolsAnalytics: [
+            { id: 'pool-rotational', name: 'Family Rotational Savings', type: 'rotational', status: 'active', balance: 500.00, healthScore: 95, riskIndicator: 'Low' },
+            { id: 'pool-target', name: 'Tech Upgrade Fund', type: 'target', status: 'active', balance: 450.00, healthScore: 78, riskIndicator: 'Medium' },
+            { id: 'pool-flexible', name: 'Emergency Rainy Day', type: 'flexible', status: 'active', balance: 300.00, healthScore: 90, riskIndicator: 'Low' }
+          ],
+          globalChartData: [
+            { date: 'Jun 10', deposits: 300, withdrawals: 0, balance: 300 },
+            { date: 'Jun 11', deposits: 500, withdrawals: 50, balance: 450 },
+            { date: 'Jun 12', deposits: 800, withdrawals: 100, balance: 700 },
+            { date: 'Jun 13', deposits: 1100, withdrawals: 200, balance: 900 },
+            { date: 'Jun 14', deposits: 1400, withdrawals: 300, balance: 1100 },
+            { date: 'Jun 15', deposits: 1800, withdrawals: 550, balance: 1250 }
+          ],
         })
       }
 
