@@ -59,3 +59,8 @@ jobs:
         run: |
           ls -lh target/wasm32-unknown-unknown/release/*.wasm
           echo "All contracts built successfully"
+
+      - name: Run unit tests
+        working-directory: smartcontract
+        run: cargo test
+

@@ -546,6 +546,9 @@ export interface RotationalPoolState {
   members: string[]
   nextPayoutTime: number   // unix timestamp (seconds)
   hasDeposited: boolean    // for the querying user
+  depositCount: number     // number of members who deposited in the current round
+  treasuryFeeBps: number | null
+  relayerFeeBps: number | null
 }
 
 export interface TargetPoolState {
@@ -592,6 +595,30 @@ async function viewCall(contractId: string, method: string, ...args: xdr.ScVal[]
   return (sim as rpc.Api.SimulateTransactionSuccessResponse).result!.retval
 }
 
+async function fetchContractStorage(contractId: string, keySymbol: string): Promise<xdr.ScVal | null> {
+  try {
+    const server = getRpc()
+    const ledgerKey = xdr.LedgerKey.contractData(
+      new xdr.LedgerKeyContractData({
+        contract: Address.fromString(normalizeId(contractId)).toScAddress(),
+        key: xdr.ScVal.scvVec([xdr.ScVal.scvSymbol(keySymbol)]),
+        durability: xdr.ContractDataDurability.persistent(),
+      })
+    )
+    const response = await server.getLedgerEntries(ledgerKey)
+    if (response.entries && response.entries.length > 0) {
+      const entry = response.entries[0]
+      const rawXdr = entry.xdr || (entry.val && typeof (entry.val as any).toXDR === "function" ? (entry.val as any).toXDR("base64") : "")
+      if (!rawXdr) return null
+      const ledgerData = xdr.LedgerEntryData.fromXDR(rawXdr, "base64")
+      return ledgerData.contractData().val()
+    }
+  } catch (err) {
+    console.error(`Error fetching contract storage for ${keySymbol}:`, err)
+  }
+  return null
+}
+
 function scValToBigInt(val: xdr.ScVal): bigint {
   // i128 / u128 are stored as hi+lo parts
   if (val.switch().name === "scvI128") {
@@ -620,11 +647,13 @@ export async function fetchRotationalState(
   contractId: string,
   userAddress?: string
 ): Promise<RotationalPoolState> {
-  const [activeVal, roundVal, membersVal, payoutVal] = await Promise.all([
+  const [activeVal, roundVal, membersVal, payoutVal, treasurySc, relayerSc] = await Promise.all([
     viewCall(contractId, "is_active"),
     viewCall(contractId, "current_round"),
     viewCall(contractId, "members"),
     viewCall(contractId, "next_payout_time"),
+    fetchContractStorage(contractId, "TreasuryFeeBps"),
+    fetchContractStorage(contractId, "RelayerFeeBps"),
   ])
 
   const members = activeVal.switch().name !== "scvBool"
@@ -639,12 +668,39 @@ export async function fetchRotationalState(
     } catch {}
   }
 
+  let depositCount = 0
+  if (activeVal.switch().name === "scvBool" && activeVal.b() && members.length > 0) {
+    try {
+      const depositChecks: boolean[] = []
+      const batchSize = 3
+      for (let i = 0; i < members.length; i += batchSize) {
+        const batch = members.slice(i, i + batchSize)
+        const results = await Promise.all(
+          batch.map(async (m) => {
+            const depVal = await viewCall(contractId, "has_deposited", addressVal(m))
+            return depVal.switch().name === "scvBool" ? depVal.b() : false
+          })
+        )
+        depositChecks.push(...results)
+      }
+      depositCount = depositChecks.filter(Boolean).length
+    } catch (e) {
+      console.error("Failed to query deposit checks for members:", e)
+    }
+  }
+
+  const treasuryFeeBps = treasurySc && treasurySc.switch().name === "scvU32" ? treasurySc.u32() : null
+  const relayerFeeBps = relayerSc && relayerSc.switch().name === "scvU32" ? relayerSc.u32() : null
+
   return {
     isActive: activeVal.switch().name === "scvBool" ? activeVal.b() : false,
     currentRound: roundVal.switch().name === "scvU32" ? roundVal.u32() : 0,
     members,
     nextPayoutTime: Number(scValToBigInt(payoutVal)),
     hasDeposited,
+    depositCount,
+    treasuryFeeBps,
+    relayerFeeBps,
   }
 }
 
@@ -674,6 +730,106 @@ export async function fetchTargetState(
   }
 }
 
+// ── On-chain event fetching ───────────────────────────────────────────────────
+
+export interface ActivityEvent {
+  id: string
+  activity_type: string
+  user_address: string | null
+  amount: number | null
+  description: string | null
+  created_at: string
+  tx_hash: string | null
+  source: "onchain" | "offchain"
+}
+
+/**
+ * Fetch contract events from the RPC and map them to ActivityEvent rows.
+ * Topics emitted by contracts: "deposit", "payout", "withdraw", "complete",
+ * "unlocked", "refunded", "yield".
+ */
+export async function fetchContractEvents(
+  contractId: string,
+  startLedger: number
+): Promise<ActivityEvent[]> {
+  const server = getRpc()
+  const response = await server.getEvents({
+    startLedger,
+    filters: [
+      {
+        type: "contract",
+        contractIds: [contractId],
+      },
+    ],
+    limit: 100,
+  })
+
+  const events: ActivityEvent[] = []
+
+  for (const ev of response.events) {
+    const topics = ev.topic
+    if (!topics.length) continue
+
+    // First topic is always the event name symbol
+    const topicName =
+      topics[0].switch().name === "scvSymbol"
+        ? topics[0].sym().toString()
+        : null
+    if (!topicName) continue
+
+    // Second topic (optional) is the address
+    let userAddress: string | null = null
+    if (topics[1]?.switch().name === "scvAddress") {
+      try {
+        userAddress = Address.fromScVal(topics[1]).toString()
+      } catch {}
+    }
+
+    // Value is the amount (i128) for deposit/payout/withdraw
+    let amount: number | null = null
+    try {
+      const val = ev.value
+      const sw = val.switch().name
+      if (sw === "scvI128" || sw === "scvU128" || sw === "scvU64" || sw === "scvI64") {
+        amount = Number(scValToBigInt(val)) / 10_000_000
+      }
+    } catch {}
+
+    const typeMap: Record<string, string> = {
+      deposit: "deposit",
+      payout: "payout",
+      withdraw: "withdraw",
+      complete: "complete",
+      unlocked: "complete",
+      refunded: "withdraw",
+      yield: "yield",
+    }
+
+    const activity_type = typeMap[topicName]
+    if (!activity_type) continue
+
+    // Derive a stable id from txHash + topic
+    const id = `${ev.txHash}-${topicName}`
+
+    events.push({
+      id,
+      activity_type,
+      user_address: userAddress,
+      amount,
+      description: null,
+      // Soroban events don't carry a timestamp; use ledger close time if available
+      created_at: ev.ledgerClosedAt ?? new Date(0).toISOString(),
+      tx_hash: ev.txHash,
+      source: "onchain",
+    })
+  }
+
+  // Most-recent first
+  return events.sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  )
+}
+
 export async function fetchFlexibleState(
   contractId: string,
   userAddress?: string
@@ -696,4 +852,74 @@ export async function fetchFlexibleState(
     totalBalance: scValToBigInt(totalVal),
     userBalance,
   }
+}
+
+export async function fetchIsPaused(contractId: string): Promise<boolean> {
+  try {
+    const val = await viewCall(contractId, "is_paused")
+    return val.switch().name === "scvBool" ? val.b() : false
+  } catch {
+    return false
+  }
+}
+
+export async function fetchPoolAdmin(contractId: string): Promise<string | null> {
+  try {
+    const val = await viewCall(contractId, "admin")
+    return val.switch().name === "scvAddress" ? Address.fromScVal(val).toString() : null
+  } catch {
+    return null
+  }
+}
+
+// ── Pause / Unpause hooks ─────────────────────────────────────────────────────
+
+export function usePausePool(contractId: string) {
+  const { kit, address } = useStellar()
+  const [isLoading, setIsLoading] = useState(false)
+
+  const pause = async (): Promise<string | undefined> => {
+    if (!kit || !address || !contractId) return
+    setIsLoading(true)
+    try {
+      const account = await getRpc().getAccount(address)
+      const tx = new TransactionBuilder(account, {
+        fee: BASE_FEE,
+        networkPassphrase: STELLAR_NETWORK_PASSPHRASE,
+      })
+        .addOperation(new Contract(normalizeId(contractId)).call("pause", addressVal(address)))
+        .setTimeout(TX_TIMEOUT)
+        .build()
+      return await submitTx(kit, tx)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return { pause, isLoading }
+}
+
+export function useUnpausePool(contractId: string) {
+  const { kit, address } = useStellar()
+  const [isLoading, setIsLoading] = useState(false)
+
+  const unpause = async (): Promise<string | undefined> => {
+    if (!kit || !address || !contractId) return
+    setIsLoading(true)
+    try {
+      const account = await getRpc().getAccount(address)
+      const tx = new TransactionBuilder(account, {
+        fee: BASE_FEE,
+        networkPassphrase: STELLAR_NETWORK_PASSPHRASE,
+      })
+        .addOperation(new Contract(normalizeId(contractId)).call("unpause", addressVal(address)))
+        .setTimeout(TX_TIMEOUT)
+        .build()
+      return await submitTx(kit, tx)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return { unpause, isLoading }
 }

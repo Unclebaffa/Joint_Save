@@ -5,8 +5,6 @@ import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import Image from "next/image"
 import { useStellar } from "@/components/web3-provider"
-import { Menu } from "lucide-react"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
@@ -67,23 +65,7 @@ export function DashboardHeader() {
 
           <div className="flex items-center gap-4">
             <ThemeToggle />
-            <Button onClick={disconnect} variant="outline" className="hidden sm:flex">
-              {address?.slice(0, 6)}...{address?.slice(-4)}
-            </Button>
 
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="sm:hidden">
-                  <Menu className="h-5 w-5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={disconnect}>
-                  Disconnect: {address?.slice(0, 6)}...{address?.slice(-4)}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          <div className="flex items-center gap-2">
             {address ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
