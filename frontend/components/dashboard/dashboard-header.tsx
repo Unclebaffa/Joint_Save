@@ -64,6 +64,9 @@ export function DashboardHeader() {
           </Link>
 
           <div className="flex items-center gap-4">
+            <span className="text-xs text-muted-foreground hidden md:block">
+              Press <kbd className="rounded-sm border border-border bg-muted px-1 font-sans text-[10px] font-medium">?</kbd> for shortcuts
+            </span>
             <ThemeToggle />
             {address ? (
               <DropdownMenu>
