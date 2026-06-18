@@ -1,11 +1,28 @@
-import { Metadata } from "next"
-import DashboardClient from "./DashboardClient"
-
-export const metadata: Metadata = {
-  title: "Dashboard — JointSave",
-}
+"use client"
+import { useStellar } from "@/components/web3-provider"
+import { redirect } from "next/navigation"
+import { DashboardHeader } from "@/components/dashboard/dashboard-header"
+import { DashboardTabs } from "@/components/dashboard/dashboard-tabs"
+import { BackToTop } from "@/components/ui/back-to-top"
+import { useEffect } from "react"
 
 export default function DashboardPage() {
-  return <DashboardClient />
+  const { isConnected } = useStellar()
+  useEffect(() => {
+    if (!isConnected) {
+      redirect("/")
+    }
+  }, [isConnected])
+  if (!isConnected) {
+    return null
+  }
+  return (
+    <div className="min-h-screen bg-background">
+      <DashboardHeader />
+      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <DashboardTabs />
+      </main>
+      <BackToTop />
+    </div>
+  )
 }
-

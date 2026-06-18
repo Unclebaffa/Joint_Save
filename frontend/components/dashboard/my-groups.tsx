@@ -15,6 +15,8 @@ import {
   TargetPoolState,
   FlexiblePoolState,
 } from "@/hooks/useJointSaveContracts"
+import { EmptyState } from "@/components/dashboard/empty-state"
+import { FirstPoolTooltip } from "@/components/dashboard/first-pool-tooltip"
 
 interface Pool {
   id: string
@@ -230,27 +232,17 @@ export function MyGroups({ onCreateClick }: MyGroupsProps) {
       </motion.div>
 
       {pools.length === 0 ? (
-        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.5 }}>
-          <Card className="p-12 text-center">
-            <div className="max-w-md mx-auto">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 mx-auto mb-4">
-                <Users className="h-8 w-8 text-primary" />
-              </div>
-              <h3 className="text-xl font-semibold mb-2">No groups yet</h3>
-              <p className="text-muted-foreground mb-6">Create your first savings group or join an existing one</p>
-              <Button className="bg-primary hover:bg-primary/90" onClick={onCreateClick}>
-                Create Your First Group
-              </Button>
-            </div>
-          </Card>
-        </motion.div>
+        <EmptyState onCreateClick={onCreateClick} />
       ) : (
-        <motion.div variants={container} initial="hidden" animate="show"
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {pools.map((pool) => (
-            <PoolCard key={pool.id} pool={pool} />
-          ))}
-        </motion.div>
+        <>
+          <FirstPoolTooltip poolCount={pools.length} />
+          <motion.div variants={container} initial="hidden" animate="show"
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {pools.map((pool) => (
+              <PoolCard key={pool.id} pool={pool} />
+            ))}
+          </motion.div>
+        </>
       )}
     </div>
   )
