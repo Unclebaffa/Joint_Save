@@ -16,6 +16,7 @@ import {
 } from "@/hooks/useJointSaveContracts"
 import { usePoolData } from "@/lib/data-layer/PoolDataProvider"
 import { useToast } from "@/hooks/use-toast"
+import { useOptimisticTransactions } from "@/hooks/useOptimisticTransactions"
 
 interface GroupDetailsProps {
   groupId: string;
