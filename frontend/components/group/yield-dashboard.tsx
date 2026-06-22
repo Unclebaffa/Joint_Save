@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, TrendingUp, Zap, AlertTriangle, RefreshCw } from "lucide-react"
 import { useStellar, STELLAR_RPC_URL, STELLAR_NETWORK_PASSPHRASE } from "@/components/web3-provider"
+import { enqueueSign } from "@/lib/tx-queue"
 import {
   Contract, TransactionBuilder, BASE_FEE, nativeToScVal, xdr,
   Address, rpc,
@@ -122,7 +123,7 @@ export function YieldDashboard({ poolAddress }: YieldDashboardProps) {
     const sim = await server.simulateTransaction(tx)
     if (rpc.Api.isSimulationError(sim)) throw new Error(`Simulation: ${sim.error}`)
     const prepared = rpc.assembleTransaction(tx, sim).build()
-    const { signedTxXdr } = await kit!.signTransaction(prepared.toXDR(), {
+    const { signedTxXdr } = await enqueueSign(prepared.toXDR(), {
       networkPassphrase: STELLAR_NETWORK_PASSPHRASE,
     })
     const result = await server.sendTransaction(new Transaction(signedTxXdr, STELLAR_NETWORK_PASSPHRASE))
