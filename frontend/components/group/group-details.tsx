@@ -9,7 +9,7 @@ import { Calendar, TrendingUp, Users, Clock, RefreshCw, AlertTriangle, Copy, Che
 import { Button } from "@/components/ui/button"
 import { motion } from "framer-motion"
 import {
-  stroopsToXlm,
+  formatTokenAmount,
   RotationalPoolState,
   TargetPoolState,
   FlexiblePoolState,
@@ -109,6 +109,11 @@ export function GroupDetails({ groupId, contractAddress }: GroupDetailsProps) {
     );
   }
 
+  // Token display metadata (persisted on the pool row; defaults to native XLM)
+  const tokenSymbol: string = group.token_symbol ?? "XLM";
+  const tokenDecimals: number = group.token_decimals ?? 7;
+  const fmt = (v: bigint) => formatTokenAmount(v, tokenDecimals);
+
   // ── Live stats (prefer onchain data over DB) ────────────────────────────────
   const getLiveStats = () => {
     const base: any[] = [
@@ -135,7 +140,7 @@ export function GroupDetails({ groupId, contractAddress }: GroupDetailsProps) {
       });
     } else if (group.type === "target" && onchainState) {
       const s = onchainState as TargetPoolState;
-      let totalSavedDisplay = stroopsToXlm(s.totalDeposited).toFixed(2);
+      let totalSavedDisplay = fmt(s.totalDeposited).toFixed(2);
       let isPendingValue = false;
 
       // Apply optimistic deposit if pending
@@ -145,7 +150,7 @@ export function GroupDetails({ groupId, contractAddress }: GroupDetailsProps) {
         pendingTx.type === "deposit" &&
         pendingTx.amount
       ) {
-        const optimistic = stroopsToXlm(s.totalDeposited + pendingTx.amount);
+        const optimistic = fmt(s.totalDeposited + pendingTx.amount);
         totalSavedDisplay = optimistic.toFixed(2);
         isPendingValue = true;
       }
@@ -160,7 +165,7 @@ export function GroupDetails({ groupId, contractAddress }: GroupDetailsProps) {
       base.push({
         icon: Calendar,
         label: "Target",
-        value: `${stroopsToXlm(s.targetAmount).toFixed(2)} XLM`,
+        value: `${fmt(s.targetAmount).toFixed(2)} ${tokenSymbol}`,
       });
       base.push({
         icon: Clock,
@@ -171,17 +176,17 @@ export function GroupDetails({ groupId, contractAddress }: GroupDetailsProps) {
       });
     } else if (group.type === "flexible" && onchainState) {
       const s = onchainState as FlexiblePoolState;
-      let userBalanceDisplay = stroopsToXlm(s.userBalance).toFixed(2);
+      let userBalanceDisplay = fmt(s.userBalance).toFixed(2);
       let isPendingValue = false;
 
       // Apply optimistic changes
       if (pendingTx && pendingTx.status === "pending") {
         if (pendingTx.type === "deposit" && pendingTx.amount) {
-          const optimistic = stroopsToXlm(s.userBalance + pendingTx.amount);
+          const optimistic = fmt(s.userBalance + pendingTx.amount);
           userBalanceDisplay = optimistic.toFixed(2);
           isPendingValue = true;
         } else if (pendingTx.type === "withdraw" && pendingTx.amount) {
-          const optimistic = stroopsToXlm(s.userBalance - pendingTx.amount);
+          const optimistic = fmt(s.userBalance - pendingTx.amount);
           userBalanceDisplay = optimistic.toFixed(2);
           isPendingValue = true;
         }
@@ -190,7 +195,7 @@ export function GroupDetails({ groupId, contractAddress }: GroupDetailsProps) {
       base.unshift({
         icon: TrendingUp,
         label: "Total Balance",
-        value: `${stroopsToXlm(s.totalBalance).toFixed(2)} XLM`,
+        value: `${fmt(s.totalBalance).toFixed(2)} ${tokenSymbol}`,
       });
       base.push({
         icon: Clock,
@@ -209,7 +214,7 @@ export function GroupDetails({ groupId, contractAddress }: GroupDetailsProps) {
       base.unshift({
         icon: TrendingUp,
         label: "Total Saved",
-        value: `${(group.total_saved || 0).toFixed(2)} XLM`,
+        value: `${(group.total_saved || 0).toFixed(2)} ${tokenSymbol}`,
       });
       if (group.type === "rotational") {
         base.push({
@@ -226,7 +231,7 @@ export function GroupDetails({ groupId, contractAddress }: GroupDetailsProps) {
         base.push({
           icon: Calendar,
           label: "Target",
-          value: `${(group.target_amount || 0).toFixed(2)} XLM`,
+          value: `${(group.target_amount || 0).toFixed(2)} ${tokenSymbol}`,
         });
         base.push({
           icon: Clock,
@@ -273,17 +278,17 @@ export function GroupDetails({ groupId, contractAddress }: GroupDetailsProps) {
       const s = onchainState as TargetPoolState;
       const { pendingTx } = optimisticState;
 
-      let saved = stroopsToXlm(s.totalDeposited);
+      let saved = fmt(s.totalDeposited);
       if (
         pendingTx &&
         pendingTx.status === "pending" &&
         pendingTx.type === "deposit" &&
         pendingTx.amount
       ) {
-        saved = stroopsToXlm(s.totalDeposited + pendingTx.amount);
+        saved = fmt(s.totalDeposited + pendingTx.amount);
       }
 
-      return { saved, target: stroopsToXlm(s.targetAmount) };
+      return { saved, target: fmt(s.targetAmount) };
     }
     return { saved: group.total_saved || 0, target: group.target_amount || 0 };
   };
@@ -423,7 +428,7 @@ export function GroupDetails({ groupId, contractAddress }: GroupDetailsProps) {
               <span className="text-muted-foreground">Progress to Target</span>
               <span className="font-medium">
                 {targetDisplay.saved.toFixed(2)} /{" "}
-                {targetDisplay.target.toFixed(2)} XLM
+                {targetDisplay.target.toFixed(2)} {tokenSymbol}
                 {optimisticState.pendingTx?.status === "pending" &&
                   optimisticState.pendingTx.type === "deposit" && (
                     <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 font-medium">

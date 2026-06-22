@@ -22,6 +22,8 @@ export type Database = {
           creator_address: string
           contract_address: string
           token_address: string
+          token_symbol: string
+          token_decimals: number
           total_saved: number
           target_amount: number | null
           progress: number
@@ -46,6 +48,8 @@ export type Database = {
           creator_address: string
           contract_address: string
           token_address: string
+          token_symbol?: string
+          token_decimals?: number
           total_saved?: number
           target_amount?: number | null
           progress?: number
@@ -68,6 +72,8 @@ export type Database = {
           creator_address?: string
           contract_address?: string
           token_address?: string
+          token_symbol?: string
+          token_decimals?: number
           total_saved?: number
           target_amount?: number | null
           progress?: number
@@ -203,6 +209,8 @@ export async function savePoolToDatabase({
   creatorAddress,
   contractAddress,
   tokenAddress,
+  tokenSymbol,
+  tokenDecimals,
   members,
   contributionAmount,
   roundDuration,
@@ -219,6 +227,8 @@ export async function savePoolToDatabase({
   creatorAddress: string
   contractAddress: string
   tokenAddress: string
+  tokenSymbol?: string
+  tokenDecimals?: number
   members: string[]
   contributionAmount?: string
   roundDuration?: number
@@ -242,6 +252,8 @@ export async function savePoolToDatabase({
           creator_address: creatorAddress.toLowerCase(),
           contract_address: contractAddress,
           token_address: tokenAddress,
+          token_symbol: tokenSymbol || 'XLM',
+          token_decimals: tokenDecimals ?? 7,
           members_count: members.length,
           contribution_amount: contributionAmount ? parseFloat(contributionAmount) : null,
           round_duration: roundDuration || null,

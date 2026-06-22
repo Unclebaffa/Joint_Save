@@ -9,7 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, X, Loader2, AlertCircle } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useStellar } from "@/components/web3-provider"
-import { useDeployPool, useInitializePool, useRegisterPool, useSetReputationTracker } from "@/hooks/useJointSaveContracts"
+import { useDeployPool, useInitializePool, useRegisterPool, useSetReputationTracker, resolveTokenAddress } from "@/hooks/useJointSaveContracts"
+import { TokenSelect, type SelectedToken } from "@/components/create-group/token-select"
 import { FieldTooltip } from "@/components/ui/field-tooltip"
 import { FieldError } from "@/components/ui/form"
 import { FormProgress, type ProgressField } from "@/components/ui/form-progress"
@@ -24,7 +25,6 @@ function isValidStellarAddress(addr: string) {
 }
 
 const TREASURY = process.env.NEXT_PUBLIC_FACTORY_CONTRACT_ID || ""
-const TOKEN = process.env.NEXT_PUBLIC_TOKEN_CONTRACT_ID || "native"
 
 // Stellar testnet: ~5 ledgers/sec, so 1 day ≈ 17280 ledgers
 const FREQUENCY_SECONDS: Record<string, number> = {
@@ -40,6 +40,7 @@ type Touched = Partial<Record<"name" | "contributionAmount", boolean>>
 export function RotationalForm() {
   const router = useRouter()
   const { address } = useStellar()
+  const [token, setToken] = useState<SelectedToken>({ address: "native", symbol: "XLM", decimals: 7 })
   // Creator is always the first member (read-only), others are editable
   const [members, setMembers] = useState<string[]>([""])
   const [memberErrors, setMemberErrors] = useState<string[]>([""])
@@ -129,7 +130,8 @@ export function RotationalForm() {
       // 2. Initialize the contract onchain
       setStep("initializing")
       await initRotational(contractId, {
-        token: TOKEN === "native" ? "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC" : TOKEN,
+        token: resolveTokenAddress(token.address),
+        decimals: token.decimals,
         admin: address,
         members: validMembers,
         depositAmount: formData.contributionAmount,
@@ -165,7 +167,9 @@ export function RotationalForm() {
           poolType: "rotational",
           creatorAddress: address,
           poolAddress: contractId,
-          tokenAddress: TOKEN,
+          tokenAddress: token.address,
+          tokenSymbol: token.symbol,
+          tokenDecimals: token.decimals,
           members: validMembers,
           contributionAmount: formData.contributionAmount,
           roundDuration: FREQUENCY_SECONDS[formData.frequency],
@@ -250,11 +254,13 @@ export function RotationalForm() {
         />
       </div>
 
+      <TokenSelect onChange={setToken} />
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-1">
           <FieldTooltip
             htmlFor="amount"
-            label="Contribution Amount (XLM)"
+            label={`Contribution Amount (${token.symbol})`}
             tooltip="How much each member deposits per round. Every member pays the same amount, and one member receives the full pool each round."
             required
           />

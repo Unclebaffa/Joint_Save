@@ -57,6 +57,8 @@ fn test_happy_path() {
     assert!(!client.is_paused());
     assert_eq!(client.current_round(), 0);
     assert_eq!(client.members().len(), 3);
+    // SEP-41 decimals are validated at init and stored for display (SAC = 7)
+    assert_eq!(client.token_decimals(), 7);
     assert_eq!(
         client.next_payout_time(),
         env.ledger().timestamp() + round_duration

@@ -36,6 +36,8 @@ fn test_unlock_on_target() {
 
     assert!(!client.is_unlocked());
     assert_eq!(client.total_deposited(), 0);
+    // SEP-41 decimals are validated at init and stored for display (SAC = 7)
+    assert_eq!(client.token_decimals(), 7);
 
     token_client.mint(&member_a, &100i128);
     token_client.mint(&member_b, &100i128);

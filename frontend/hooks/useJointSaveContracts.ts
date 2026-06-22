@@ -25,7 +25,6 @@ const FACTORY_ID = process.env.NEXT_PUBLIC_FACTORY_CONTRACT_ID!
 // Optional — the reputation system is additive, so an unconfigured tracker
 // degrades to default scores instead of breaking pool creation/use.
 const REPUTATION_ID = process.env.NEXT_PUBLIC_REPUTATION_CONTRACT_ID || ""
-const XLM_STROOPS = 10_000_000
 // 5 minutes — enough time for the user to review and sign in their wallet
 const TX_TIMEOUT = 300
 
@@ -33,6 +32,28 @@ const WASM_HASHES: Record<string, string> = {
   rotational: process.env.NEXT_PUBLIC_ROTATIONAL_WASM_HASH!,
   target: process.env.NEXT_PUBLIC_TARGET_WASM_HASH!,
   flexible: process.env.NEXT_PUBLIC_FLEXIBLE_WASM_HASH!,
+}
+
+// ── Token config ────────────────────────────────────────────────────────────
+// Stellar Asset Contract for native XLM on testnet — used whenever a pool's
+// token is "native" so the contract still receives a real SEP-41 address.
+export const NATIVE_SAC_ID =
+  "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
+export const NATIVE_TOKEN_METADATA: TokenMetadata = {
+  name: "Stellar Lumens",
+  symbol: "XLM",
+  decimals: 7,
+}
+
+export interface TokenMetadata {
+  name: string
+  symbol: string
+  decimals: number
+}
+
+/** "native"/empty → the native SAC address; otherwise the given contract id. */
+export function resolveTokenAddress(tokenId: string): string {
+  return !tokenId || tokenId === "native" ? NATIVE_SAC_ID : tokenId
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -44,8 +65,9 @@ export function getRpc() {
 // Stellar strkeys are case-insensitive but the SDK requires uppercase
 const normalizeId = (id: string) => id.toUpperCase()
 
-const toStroops = (xlm: string): bigint =>
-  BigInt(Math.round(parseFloat(xlm) * XLM_STROOPS))
+/** Convert a human amount string into the token's base units, given its decimals. */
+const toBaseUnits = (amount: string, decimals: number): bigint =>
+  BigInt(Math.round(parseFloat(amount) * 10 ** decimals))
 
 // Works for both G... account and C... contract addresses
 function addressVal(addr: string): xdr.ScVal {
@@ -199,6 +221,7 @@ export function useInitializePool() {
     contractId: string,
     params: {
       token: string
+      decimals: number
       admin: string
       members: string[]
       depositAmount: string
@@ -222,7 +245,7 @@ export function useInitializePool() {
             addressVal(params.token),
             addressVal(params.admin),
             vecVal(params.members),
-            i128Val(toStroops(params.depositAmount)),
+            i128Val(toBaseUnits(params.depositAmount, params.decimals)),
             u64Val(BigInt(params.roundDuration)),
             u32Val(params.treasuryFeeBps),
             u32Val(params.relayerFeeBps),
@@ -241,6 +264,7 @@ export function useInitializePool() {
     contractId: string,
     params: {
       token: string
+      decimals: number
       admin: string
       members: string[]
       targetAmount: string
@@ -261,7 +285,7 @@ export function useInitializePool() {
             addressVal(params.token),
             addressVal(params.admin),
             vecVal(params.members),
-            i128Val(toStroops(params.targetAmount)),
+            i128Val(toBaseUnits(params.targetAmount, params.decimals)),
             u32Val(params.deadlineLedger)
           )
         )
@@ -277,6 +301,7 @@ export function useInitializePool() {
     contractId: string,
     params: {
       token: string
+      decimals: number
       admin: string
       members: string[]
       minimumDeposit: string
@@ -300,7 +325,7 @@ export function useInitializePool() {
             addressVal(params.token),
             addressVal(params.admin),
             vecVal(params.members),
-            i128Val(toStroops(params.minimumDeposit)),
+            i128Val(toBaseUnits(params.minimumDeposit, params.decimals)),
             u32Val(params.withdrawalFeeBps),
             boolVal(params.yieldEnabled),
             addressVal(params.treasury),
@@ -446,7 +471,7 @@ export function useTriggerPayout(contractId: string) {
 
 // ── Target Pool actions ───────────────────────────────────────────────────────
 
-export function useTargetContribute(contractId: string, amount: string) {
+export function useTargetContribute(contractId: string, amount: string, decimals = 7) {
   const { kit, address } = useStellar()
   const [isLoading, setIsLoading] = useState(false)
 
@@ -460,7 +485,7 @@ export function useTargetContribute(contractId: string, amount: string) {
         networkPassphrase: STELLAR_NETWORK_PASSPHRASE,
       })
         .addOperation(
-          new Contract(normalizeId(contractId)).call("deposit", addressVal(address), i128Val(toStroops(amount)))
+          new Contract(normalizeId(contractId)).call("deposit", addressVal(address), i128Val(toBaseUnits(amount, decimals)))
         )
         .setTimeout(TX_TIMEOUT)
         .build()
@@ -525,7 +550,7 @@ export function useTargetRefund(contractId: string) {
 
 // ── Flexible Pool actions ─────────────────────────────────────────────────────
 
-export function useFlexibleDeposit(contractId: string, amount: string) {
+export function useFlexibleDeposit(contractId: string, amount: string, decimals = 7) {
   const { kit, address } = useStellar()
   const [isLoading, setIsLoading] = useState(false)
 
@@ -539,7 +564,7 @@ export function useFlexibleDeposit(contractId: string, amount: string) {
         networkPassphrase: STELLAR_NETWORK_PASSPHRASE,
       })
         .addOperation(
-          new Contract(normalizeId(contractId)).call("deposit", addressVal(address), i128Val(toStroops(amount)))
+          new Contract(normalizeId(contractId)).call("deposit", addressVal(address), i128Val(toBaseUnits(amount, decimals)))
         )
         .setTimeout(TX_TIMEOUT)
         .build()
@@ -552,7 +577,7 @@ export function useFlexibleDeposit(contractId: string, amount: string) {
   return { deposit, isLoading }
 }
 
-export function useFlexibleWithdraw(contractId: string, amount: string) {
+export function useFlexibleWithdraw(contractId: string, amount: string, decimals = 7) {
   const { kit, address } = useStellar()
   const [isLoading, setIsLoading] = useState(false)
 
@@ -566,7 +591,7 @@ export function useFlexibleWithdraw(contractId: string, amount: string) {
         networkPassphrase: STELLAR_NETWORK_PASSPHRASE,
       })
         .addOperation(
-          new Contract(normalizeId(contractId)).call("withdraw", addressVal(address), i128Val(toStroops(amount)))
+          new Contract(normalizeId(contractId)).call("withdraw", addressVal(address), i128Val(toBaseUnits(amount, decimals)))
         )
         .setTimeout(TX_TIMEOUT)
         .build()
@@ -621,8 +646,14 @@ const DEFAULT_REPUTATION: ReputationScore = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+/** Convert a token amount in base units to a human number, given its decimals. */
+export function formatTokenAmount(amount: bigint, decimals = 7): number {
+  return Number(amount) / 10 ** decimals
+}
+
+/** Back-compat shim — native XLM has 7 decimals. Prefer formatTokenAmount. */
 export function stroopsToXlm(stroops: bigint): number {
-  return Number(stroops) / 10_000_000
+  return formatTokenAmount(stroops, 7)
 }
 
 /** Fire-and-forget read call — no signing, no fee. */
@@ -704,6 +735,34 @@ function scValToString(val: xdr.ScVal): string {
     return Address.fromScVal(val).toString()
   }
   return ""
+}
+
+/** Decode an ScVal that holds text (SEP-41 name()/symbol() return String). */
+function scValToText(val: xdr.ScVal): string {
+  const n = val.switch().name
+  if (n === "scvString") return val.str().toString()
+  if (n === "scvSymbol") return val.sym().toString()
+  return ""
+}
+
+/**
+ * Read a token contract's SEP-41 metadata (name / symbol / decimals) via view
+ * calls. "native"/empty short-circuits to XLM without an RPC round-trip. Throws
+ * if the address isn't a valid token contract (so forms can validate input).
+ */
+export async function fetchTokenMetadata(tokenId: string): Promise<TokenMetadata> {
+  if (!tokenId || tokenId === "native") return NATIVE_TOKEN_METADATA
+  const addr = resolveTokenAddress(tokenId)
+  const [nameV, symbolV, decimalsV] = await Promise.all([
+    viewCall(addr, "name"),
+    viewCall(addr, "symbol"),
+    viewCall(addr, "decimals"),
+  ])
+  return {
+    name: scValToText(nameV) || "Token",
+    symbol: scValToText(symbolV) || "TKN",
+    decimals: decimalsV.switch().name === "scvU32" ? decimalsV.u32() : 7,
+  }
 }
 
 function scValToU32(val?: xdr.ScVal): number {

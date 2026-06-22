@@ -47,6 +47,15 @@ fn setup_pool(
 // ── Original tests (updated for new initialize signature) ─────────────────────
 
 #[test]
+fn test_token_decimals_recorded() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _token, _admin, _treasury, _a, _b) = setup_pool(&env, false);
+    // SEP-41 decimals are validated at init and stored for display (SAC = 7)
+    assert_eq!(client.token_decimals(), 7);
+}
+
+#[test]
 #[should_panic(expected = "below minimum deposit")]
 fn test_minimum_deposit_rejection() {
     let env = Env::default();

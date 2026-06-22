@@ -11,7 +11,7 @@ import {
   fetchTargetState,
   fetchFlexibleState,
   fetchReputation,
-  stroopsToXlm,
+  formatTokenAmount,
   type ReputationScore,
 } from "@/hooks/useJointSaveContracts"
 
@@ -29,7 +29,7 @@ async function fetchProfileStats(address: string): Promise<ProfileStats> {
   // Fetch all pools where user is a member
   const { data: memberships } = await supabase
     .from("pool_members")
-    .select("pool_id, pools(id, type, contract_address, target_amount)")
+    .select("pool_id, pools(id, type, contract_address, target_amount, token_decimals)")
     .eq("member_address", lower)
 
   const pools: any[] = (memberships || [])
@@ -54,12 +54,13 @@ async function fetchProfileStats(address: string): Promise<ProfileStats> {
     pools.map(async (pool) => {
       if (!pool.contract_address || pool.contract_address === "pending_deployment") return
       try {
+        const decimals = pool.token_decimals ?? 7
         if (pool.type === "target") {
           const state = await fetchTargetState(pool.contract_address, address)
-          totalSaved += stroopsToXlm(state.userBalance)
+          totalSaved += formatTokenAmount(state.userBalance, decimals)
         } else if (pool.type === "flexible") {
           const state = await fetchFlexibleState(pool.contract_address, address)
-          totalSaved += stroopsToXlm(state.userBalance)
+          totalSaved += formatTokenAmount(state.userBalance, decimals)
         }
         // rotational: no per-user balance view — skip
       } catch {}
@@ -108,8 +109,10 @@ export function Profile() {
       .finally(() => setLoading(false))
   }, [address])
 
+  // Balances can span multiple tokens, so the aggregate is token-agnostic
+  // (no single currency symbol). Per-pool views show the real token symbol.
   const fmt = (n: number) =>
-    n >= 1000 ? `${(n / 1000).toFixed(1)}k XLM` : `${n.toFixed(2)} XLM`
+    n >= 1000 ? `${(n / 1000).toFixed(1)}k` : n.toFixed(2)
 
   return (
     <div className="space-y-6">

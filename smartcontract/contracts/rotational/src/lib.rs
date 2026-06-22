@@ -22,6 +22,7 @@ pub enum DataKey {
     Paused,
     HasDeposited(Address),
     ReputationTracker,
+    TokenDecimals,
 }
 
 // ── Contract ──────────────────────────────────────────────────────────────────
@@ -47,8 +48,13 @@ impl RotationalPool {
         assert!(deposit_amount > 0, "deposit must be > 0");
         assert!(round_duration > 0, "round_duration must be > 0");
 
+        // Validate the token is a real SEP-41 contract by reading its decimals
+        // (this call traps for a non-token address) and remember it for display.
+        let decimals = token::Client::new(&env, &token).decimals();
+
         let storage = env.storage().persistent();
         storage.set(&DataKey::Token, &token);
+        storage.set(&DataKey::TokenDecimals, &decimals);
         storage.set(&DataKey::Admin, &admin);
         storage.set(&DataKey::Treasury, &treasury);
         storage.set(&DataKey::Members, &members);
@@ -328,6 +334,15 @@ impl RotationalPool {
             .persistent()
             .get(&DataKey::Active)
             .unwrap_or(false)
+    }
+
+    /// Decimals of the pool's token, recorded at initialize time. Defaults to 7
+    /// (native XLM) for pools created before multi-token support.
+    pub fn token_decimals(env: Env) -> u32 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::TokenDecimals)
+            .unwrap_or(7)
     }
 
     pub fn is_paused(env: Env) -> bool {

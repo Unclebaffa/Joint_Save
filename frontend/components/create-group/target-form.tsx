@@ -8,7 +8,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Plus, X, Loader2, AlertCircle } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useStellar } from "@/components/web3-provider"
-import { useDeployPool, useInitializePool, useRegisterPool, getRpc } from "@/hooks/useJointSaveContracts"
+import { useDeployPool, useInitializePool, useRegisterPool, getRpc, resolveTokenAddress } from "@/hooks/useJointSaveContracts"
+import { TokenSelect, type SelectedToken } from "@/components/create-group/token-select"
 import { FieldTooltip } from "@/components/ui/field-tooltip"
 import { FieldError } from "@/components/ui/form"
 import { FormProgress, type ProgressField } from "@/components/ui/form-progress"
@@ -23,8 +24,6 @@ function isValidStellarAddress(addr: string) {
   return /^G[A-Z2-7]{55}$/.test(addr)
 }
 
-const TREASURY = process.env.NEXT_PUBLIC_FACTORY_CONTRACT_ID || ""
-const TOKEN = process.env.NEXT_PUBLIC_TOKEN_CONTRACT_ID || "native"
 
 // Convert a JS Date to an approximate Stellar ledger sequence number.
 // Stellar testnet: ~5 ledgers/sec. We fetch current ledger and extrapolate.
@@ -41,6 +40,7 @@ type Touched = Partial<Record<"name" | "targetAmount" | "deadline", boolean>>
 export function TargetForm() {
   const router = useRouter()
   const { address } = useStellar()
+  const [token, setToken] = useState<SelectedToken>({ address: "native", symbol: "XLM", decimals: 7 })
   const [members, setMembers] = useState<string[]>([""])
   const [memberErrors, setMemberErrors] = useState<string[]>([""])
   const [error, setError] = useState("")
@@ -113,7 +113,8 @@ export function TargetForm() {
       setStep("initializing")
       const deadlineLedger = await dateToLedger(new Date(formData.deadline))
       await initTarget(contractId, {
-        token: TOKEN === "native" ? "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC" : TOKEN,
+        token: resolveTokenAddress(token.address),
+        decimals: token.decimals,
         admin: address,
         members: validMembers,
         targetAmount: formData.targetAmount,
@@ -138,7 +139,9 @@ export function TargetForm() {
           poolType: "target",
           creatorAddress: address,
           poolAddress: contractId,
-          tokenAddress: TOKEN,
+          tokenAddress: token.address,
+          tokenSymbol: token.symbol,
+          tokenDecimals: token.decimals,
           members: validMembers,
           targetAmount: formData.targetAmount,
           deadline: formData.deadline,
@@ -225,11 +228,13 @@ export function TargetForm() {
         />
       </div>
 
+      <TokenSelect onChange={setToken} />
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-1">
           <FieldTooltip
             htmlFor="target"
-            label="Target Amount (XLM)"
+            label={`Target Amount (${token.symbol})`}
             tooltip="The total amount the group aims to save collectively. Members contribute until this amount is reached."
             required
           />
