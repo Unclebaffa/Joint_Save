@@ -57,6 +57,8 @@ fn test_happy_path() {
     assert!(!client.is_paused());
     assert_eq!(client.current_round(), 0);
     assert_eq!(client.members().len(), 3);
+    // SEP-41 decimals are validated at init and stored for display (SAC = 7)
+    assert_eq!(client.token_decimals(), 7);
     assert_eq!(
         client.next_payout_time(),
         env.ledger().timestamp() + round_duration
@@ -884,3 +886,51 @@ fn test_remove_member_fails_when_paused() {
     client.pause(&admin);
     client.remove_member(&admin, &member_b);
 }
+
+#[test]
+fn test_bump_state() {
+    use soroban_sdk::testutils::storage::Persistent;
+
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, RotationalPool);
+    let client = RotationalPoolClient::new(&env, &contract_id);
+
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let token_address = token_contract.address();
+
+    let treasury = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let member_a = Address::generate(&env);
+    let member_b = Address::generate(&env);
+
+    let mut members = Vec::new(&env);
+    members.push_back(member_a.clone());
+    members.push_back(member_b.clone());
+
+    // Initialize pool
+    client.initialize(
+        &token_address,
+        &admin,
+        &members,
+        &100i128,
+        &100u64,
+        &0u32,
+        &0u32,
+        &treasury,
+    );
+
+    // Call bump_state
+    client.bump_state();
+
+    // Verify Admin and Members keys TTL were extended
+    env.as_contract(&contract_id, || {
+        let admin_ttl = env.storage().persistent().get_ttl(&super::DataKey::Admin);
+        let members_ttl = env.storage().persistent().get_ttl(&super::DataKey::Members);
+        assert!(admin_ttl >= 2592000);
+        assert!(members_ttl >= 2592000);
+    });
+}
+

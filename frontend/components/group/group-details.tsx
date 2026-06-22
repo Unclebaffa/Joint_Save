@@ -9,10 +9,11 @@ import { Calendar, TrendingUp, Users, Clock, RefreshCw, AlertTriangle, Copy, Che
 import { Button } from "@/components/ui/button"
 import { motion } from "framer-motion"
 import {
-  stroopsToXlm,
+  formatTokenAmount,
   RotationalPoolState,
   TargetPoolState,
   FlexiblePoolState,
+  useBumpPoolState,
 } from "@/hooks/useJointSaveContracts"
 import { usePoolData } from "@/lib/data-layer/PoolDataProvider"
 import { useToast } from "@/hooks/use-toast"
@@ -35,11 +36,40 @@ export function GroupDetails({ groupId, contractAddress }: GroupDetailsProps) {
       ? contractAddress
       : groupId;
 
-  const { data, isLoading, isStale, isPaused, error, refetch } =
+  const { data, isLoading, isStale, isPaused, ttlDays, error, refetch } =
     usePoolData(cacheKey);
   const { optimisticState } = useOptimisticTransactions(cacheKey);
+  const { bumpPoolState, isLoading: isBumping } = useBumpPoolState(
+    data?.db?.contract_address || ""
+  );
 
   const group = data?.db ?? null;
+
+  const handleExtendStorage = async () => {
+    try {
+      const txHash = await bumpPoolState()
+      if (txHash) {
+        toast({
+          title: "Storage Extended!",
+          description: "Pool storage lease has been successfully extended.",
+        })
+        refetch()
+      } else {
+        toast({
+          title: "Failed to extend storage",
+          description: "Could not extend storage. Please check your wallet connection.",
+          variant: "destructive",
+        })
+      }
+    } catch (err: any) {
+      console.error("Extend storage error:", err)
+      toast({
+        title: "Error extending storage",
+        description: err.message || "An unexpected error occurred.",
+        variant: "destructive",
+      })
+    }
+  }
   const onchainState = data?.onchain ?? null;
 
   const isPending = (addr: string) => !addr || addr === "pending_deployment";
@@ -109,6 +139,11 @@ export function GroupDetails({ groupId, contractAddress }: GroupDetailsProps) {
     );
   }
 
+  // Token display metadata (persisted on the pool row; defaults to native XLM)
+  const tokenSymbol: string = group.token_symbol ?? "XLM";
+  const tokenDecimals: number = group.token_decimals ?? 7;
+  const fmt = (v: bigint) => formatTokenAmount(v, tokenDecimals);
+
   // ── Live stats (prefer onchain data over DB) ────────────────────────────────
   const getLiveStats = () => {
     const base: any[] = [
@@ -135,7 +170,7 @@ export function GroupDetails({ groupId, contractAddress }: GroupDetailsProps) {
       });
     } else if (group.type === "target" && onchainState) {
       const s = onchainState as TargetPoolState;
-      let totalSavedDisplay = stroopsToXlm(s.totalDeposited).toFixed(2);
+      let totalSavedDisplay = fmt(s.totalDeposited).toFixed(2);
       let isPendingValue = false;
 
       // Apply optimistic deposit if pending
@@ -145,7 +180,7 @@ export function GroupDetails({ groupId, contractAddress }: GroupDetailsProps) {
         pendingTx.type === "deposit" &&
         pendingTx.amount
       ) {
-        const optimistic = stroopsToXlm(s.totalDeposited + pendingTx.amount);
+        const optimistic = fmt(s.totalDeposited + pendingTx.amount);
         totalSavedDisplay = optimistic.toFixed(2);
         isPendingValue = true;
       }
@@ -160,7 +195,7 @@ export function GroupDetails({ groupId, contractAddress }: GroupDetailsProps) {
       base.push({
         icon: Calendar,
         label: "Target",
-        value: `${stroopsToXlm(s.targetAmount).toFixed(2)} XLM`,
+        value: `${fmt(s.targetAmount).toFixed(2)} ${tokenSymbol}`,
       });
       base.push({
         icon: Clock,
@@ -171,17 +206,17 @@ export function GroupDetails({ groupId, contractAddress }: GroupDetailsProps) {
       });
     } else if (group.type === "flexible" && onchainState) {
       const s = onchainState as FlexiblePoolState;
-      let userBalanceDisplay = stroopsToXlm(s.userBalance).toFixed(2);
+      let userBalanceDisplay = fmt(s.userBalance).toFixed(2);
       let isPendingValue = false;
 
       // Apply optimistic changes
       if (pendingTx && pendingTx.status === "pending") {
         if (pendingTx.type === "deposit" && pendingTx.amount) {
-          const optimistic = stroopsToXlm(s.userBalance + pendingTx.amount);
+          const optimistic = fmt(s.userBalance + pendingTx.amount);
           userBalanceDisplay = optimistic.toFixed(2);
           isPendingValue = true;
         } else if (pendingTx.type === "withdraw" && pendingTx.amount) {
-          const optimistic = stroopsToXlm(s.userBalance - pendingTx.amount);
+          const optimistic = fmt(s.userBalance - pendingTx.amount);
           userBalanceDisplay = optimistic.toFixed(2);
           isPendingValue = true;
         }
@@ -190,7 +225,7 @@ export function GroupDetails({ groupId, contractAddress }: GroupDetailsProps) {
       base.unshift({
         icon: TrendingUp,
         label: "Total Balance",
-        value: `${stroopsToXlm(s.totalBalance).toFixed(2)} XLM`,
+        value: `${fmt(s.totalBalance).toFixed(2)} ${tokenSymbol}`,
       });
       base.push({
         icon: Clock,
@@ -209,7 +244,7 @@ export function GroupDetails({ groupId, contractAddress }: GroupDetailsProps) {
       base.unshift({
         icon: TrendingUp,
         label: "Total Saved",
-        value: `${(group.total_saved || 0).toFixed(2)} XLM`,
+        value: `${(group.total_saved || 0).toFixed(2)} ${tokenSymbol}`,
       });
       if (group.type === "rotational") {
         base.push({
@@ -226,7 +261,7 @@ export function GroupDetails({ groupId, contractAddress }: GroupDetailsProps) {
         base.push({
           icon: Calendar,
           label: "Target",
-          value: `${(group.target_amount || 0).toFixed(2)} XLM`,
+          value: `${(group.target_amount || 0).toFixed(2)} ${tokenSymbol}`,
         });
         base.push({
           icon: Clock,
@@ -273,17 +308,17 @@ export function GroupDetails({ groupId, contractAddress }: GroupDetailsProps) {
       const s = onchainState as TargetPoolState;
       const { pendingTx } = optimisticState;
 
-      let saved = stroopsToXlm(s.totalDeposited);
+      let saved = fmt(s.totalDeposited);
       if (
         pendingTx &&
         pendingTx.status === "pending" &&
         pendingTx.type === "deposit" &&
         pendingTx.amount
       ) {
-        saved = stroopsToXlm(s.totalDeposited + pendingTx.amount);
+        saved = fmt(s.totalDeposited + pendingTx.amount);
       }
 
-      return { saved, target: stroopsToXlm(s.targetAmount) };
+      return { saved, target: fmt(s.targetAmount) };
     }
     return { saved: group.total_saved || 0, target: group.target_amount || 0 };
   };
@@ -310,6 +345,18 @@ export function GroupDetails({ groupId, contractAddress }: GroupDetailsProps) {
               {onchainState && (
                 <Badge variant="outline" className="text-xs">
                   Live onchain
+                </Badge>
+              )}
+              {ttlDays !== null && (
+                <Badge
+                  variant="outline"
+                  className={`text-xs ${
+                    ttlDays < 7
+                      ? "text-destructive border-destructive/40 bg-destructive/10"
+                      : ""
+                  }`}
+                >
+                  State expires in {ttlDays} days
                 </Badge>
               )}
               {isStale && !isLoading && (
@@ -355,6 +402,26 @@ export function GroupDetails({ groupId, contractAddress }: GroupDetailsProps) {
               ⚠️ Pool Paused — All deposits and withdrawals are currently
               disabled.
             </span>
+          </div>
+        )}
+
+        {ttlDays !== null && ttlDays < 7 && !isPending(group.contract_address) && (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-lg bg-destructive/10 text-destructive mb-4 text-sm font-medium">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+              <span>
+                ⚠️ Pool storage is expiring soon (less than 7 days remaining). Please extend its storage life.
+              </span>
+            </div>
+            <Button
+              size="sm"
+              variant="destructive"
+              className="shrink-0 self-start sm:self-auto"
+              onClick={handleExtendStorage}
+              disabled={isBumping}
+            >
+              {isBumping ? "Extending..." : "Extend Storage"}
+            </Button>
           </div>
         )}
 
@@ -423,7 +490,7 @@ export function GroupDetails({ groupId, contractAddress }: GroupDetailsProps) {
               <span className="text-muted-foreground">Progress to Target</span>
               <span className="font-medium">
                 {targetDisplay.saved.toFixed(2)} /{" "}
-                {targetDisplay.target.toFixed(2)} XLM
+                {targetDisplay.target.toFixed(2)} {tokenSymbol}
                 {optimisticState.pendingTx?.status === "pending" &&
                   optimisticState.pendingTx.type === "deposit" && (
                     <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 font-medium">

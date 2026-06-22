@@ -8,7 +8,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Plus, X, Loader2, AlertCircle } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useStellar } from "@/components/web3-provider"
-import { useDeployPool, useInitializePool, useRegisterPool } from "@/hooks/useJointSaveContracts"
+import { useDeployPool, useInitializePool, useRegisterPool, resolveTokenAddress } from "@/hooks/useJointSaveContracts"
+import { TokenSelect, type SelectedToken } from "@/components/create-group/token-select"
 import { FieldTooltip } from "@/components/ui/field-tooltip"
 import { FieldError } from "@/components/ui/form"
 import { FormProgress, type ProgressField } from "@/components/ui/form-progress"
@@ -24,7 +25,6 @@ function isValidStellarAddress(addr: string) {
 }
 
 const TREASURY = process.env.NEXT_PUBLIC_FACTORY_CONTRACT_ID || ""
-const TOKEN = process.env.NEXT_PUBLIC_TOKEN_CONTRACT_ID || "native"
 
 type FieldErrors = Partial<Record<"name" | "minimumDeposit" | "withdrawalFee", string>>
 type Touched = Partial<Record<"name" | "minimumDeposit" | "withdrawalFee", boolean>>
@@ -32,6 +32,7 @@ type Touched = Partial<Record<"name" | "minimumDeposit" | "withdrawalFee", boole
 export function FlexibleForm() {
   const router = useRouter()
   const { address } = useStellar()
+  const [token, setToken] = useState<SelectedToken>({ address: "native", symbol: "XLM", decimals: 7 })
   const [members, setMembers] = useState<string[]>([""])
   const [memberErrors, setMemberErrors] = useState<string[]>([""])
   const [error, setError] = useState("")
@@ -107,7 +108,8 @@ export function FlexibleForm() {
       // withdrawalFee is in %, convert to bps (1% = 100 bps)
       const withdrawalFeeBps = Math.round(parseFloat(formData.withdrawalFee) * 100)
       await initFlexible(contractId, {
-        token: TOKEN === "native" ? "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC" : TOKEN,
+        token: resolveTokenAddress(token.address),
+        decimals: token.decimals,
         admin: address,
         members: validMembers,
         minimumDeposit: formData.minimumDeposit,
@@ -135,7 +137,9 @@ export function FlexibleForm() {
           poolType: "flexible",
           creatorAddress: address,
           poolAddress: contractId,
-          tokenAddress: TOKEN,
+          tokenAddress: token.address,
+          tokenSymbol: token.symbol,
+          tokenDecimals: token.decimals,
           members: validMembers,
           minimumDeposit: formData.minimumDeposit,
           withdrawalFee: formData.withdrawalFee,
@@ -218,11 +222,13 @@ export function FlexibleForm() {
         />
       </div>
 
+      <TokenSelect onChange={setToken} />
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-1">
           <FieldTooltip
             htmlFor="minimum"
-            label="Minimum Deposit (XLM)"
+            label={`Minimum Deposit (${token.symbol})`}
             tooltip="The smallest amount a member can deposit in a single transaction. Helps maintain meaningful contributions."
             required
           />

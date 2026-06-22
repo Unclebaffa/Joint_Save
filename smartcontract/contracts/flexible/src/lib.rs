@@ -18,7 +18,11 @@ pub enum DataKey {
     Balance(Address),
     YieldStrategy,
     DeployedToYield,
+    TokenDecimals,
 }
+
+const LEDGER_THRESHOLD: u32 = 518400;
+const LEDGER_BUMP: u32 = 2592000;
 
 #[contract]
 pub struct FlexiblePool;
@@ -39,8 +43,13 @@ impl FlexiblePool {
         assert!(members.len() >= 2, "need >=2 members");
         assert!(minimum_deposit > 0, "minimum must be > 0");
 
+        // Validate the token is a real SEP-41 contract by reading its decimals
+        // (this call traps for a non-token address) and remember it for display.
+        let decimals = token::Client::new(&env, &token).decimals();
+
         let storage = env.storage().persistent();
         storage.set(&DataKey::Token, &token);
+        storage.set(&DataKey::TokenDecimals, &decimals);
         storage.set(&DataKey::Admin, &admin);
         storage.set(&DataKey::Treasury, &treasury);
         storage.set(&DataKey::Members, &members);
@@ -52,6 +61,8 @@ impl FlexiblePool {
         storage.set(&DataKey::Active, &true);
         storage.set(&DataKey::Paused, &false);
         storage.set(&DataKey::DeployedToYield, &0i128);
+
+        Self::bump_config_state_internal(&env);
     }
 
     pub fn deposit(env: Env, member: Address, amount: i128) {
@@ -79,6 +90,10 @@ impl FlexiblePool {
 
         let total: i128 = storage.get(&DataKey::TotalBalance).unwrap();
         storage.set(&DataKey::TotalBalance, &(total + amount));
+
+        let bal_key = DataKey::Balance(member.clone());
+        storage.extend_ttl(&bal_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+        Self::bump_config_state_internal(&env);
 
         env.events()
             .publish((symbol_short!("deposit"), member), amount);
@@ -113,6 +128,10 @@ impl FlexiblePool {
         }
         token_client.transfer(&env.current_contract_address(), &member, &net);
 
+        let bal_key = DataKey::Balance(member.clone());
+        storage.extend_ttl(&bal_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+        Self::bump_config_state_internal(&env);
+
         env.events()
             .publish((symbol_short!("withdraw"), member), net);
     }
@@ -137,11 +156,15 @@ impl FlexiblePool {
             let bal: i128 = storage.get(&DataKey::Balance(m.clone())).unwrap_or(0);
             if bal > 0 {
                 let member_yield = (yield_amount * bal) / total;
-                storage.set(&DataKey::Balance(m.clone()), &(bal + member_yield));
+                let bal_key = DataKey::Balance(m.clone());
+                storage.set(&bal_key, &(bal + member_yield));
+                storage.extend_ttl(&bal_key, LEDGER_THRESHOLD, LEDGER_BUMP);
             }
         }
 
         storage.set(&DataKey::TotalBalance, &(total + yield_amount));
+        Self::bump_config_state_internal(&env);
+
         env.events()
             .publish((symbol_short!("yield"),), yield_amount);
     }
@@ -161,6 +184,9 @@ impl FlexiblePool {
 
         members.push_back(new_member.clone());
         storage.set(&DataKey::Members, &members);
+
+        Self::bump_config_state_internal(&env);
+
         env.events()
             .publish((symbol_short!("add_mem"), new_member), ());
     }
@@ -201,6 +227,9 @@ impl FlexiblePool {
         }
 
         storage.set(&DataKey::Members, &updated_members);
+
+        Self::bump_config_state_internal(&env);
+
         env.events()
             .publish((symbol_short!("rem_mem"), member), balance);
     }
@@ -213,6 +242,9 @@ impl FlexiblePool {
         let stored_admin: Address = storage.get(&DataKey::Admin).unwrap();
         assert!(admin == stored_admin, "not admin");
         storage.set(&DataKey::Paused, &true);
+
+        Self::bump_config_state_internal(&env);
+
         env.events().publish((symbol_short!("paused"),), ());
     }
 
@@ -222,6 +254,9 @@ impl FlexiblePool {
         let stored_admin: Address = storage.get(&DataKey::Admin).unwrap();
         assert!(admin == stored_admin, "not admin");
         storage.set(&DataKey::Paused, &false);
+
+        Self::bump_config_state_internal(&env);
+
         env.events().publish((symbol_short!("unpaused"),), ());
     }
 
@@ -247,6 +282,9 @@ impl FlexiblePool {
         }
 
         storage.set(&DataKey::TotalBalance, &0i128);
+
+        Self::bump_config_state_internal(&env);
+
         env.events()
             .publish((symbol_short!("emrg_wd"),), contract_balance);
     }
@@ -262,6 +300,9 @@ impl FlexiblePool {
         let yield_enabled: bool = storage.get(&DataKey::YieldEnabled).unwrap_or(false);
         assert!(yield_enabled, "yield disabled");
         storage.set(&DataKey::YieldStrategy, &strategy);
+
+        Self::bump_config_state_internal(&env);
+
         env.events()
             .publish((symbol_short!("set_strat"),), strategy);
     }
@@ -298,6 +339,8 @@ impl FlexiblePool {
         let deployed: i128 = storage.get(&DataKey::DeployedToYield).unwrap_or(0);
         storage.set(&DataKey::DeployedToYield, &(deployed + amount));
 
+        Self::bump_config_state_internal(&env);
+
         env.events().publish((symbol_short!("deployed"),), amount);
     }
 
@@ -326,12 +369,50 @@ impl FlexiblePool {
                 let bal: i128 = storage.get(&DataKey::Balance(m.clone())).unwrap_or(0);
                 if bal > 0 && total > 0 {
                     let share = (yield_amount * bal) / total;
-                    storage.set(&DataKey::Balance(m.clone()), &(bal + share));
+                    let bal_key = DataKey::Balance(m.clone());
+                    storage.set(&bal_key, &(bal + share));
+                    storage.extend_ttl(&bal_key, LEDGER_THRESHOLD, LEDGER_BUMP);
                 }
             }
             storage.set(&DataKey::TotalBalance, &(total + yield_amount));
             env.events()
                 .publish((symbol_short!("harvested"),), yield_amount);
+        }
+
+        Self::bump_config_state_internal(&env);
+    }
+
+    pub fn bump_state(env: Env) {
+        Self::bump_config_state_internal(&env);
+        let storage = env.storage().persistent();
+        if storage.has(&DataKey::Members) {
+            let members: Vec<Address> = storage.get(&DataKey::Members).unwrap();
+            for member in members.iter() {
+                let key = DataKey::Balance(member.clone());
+                if storage.has(&key) {
+                    storage.extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+                }
+            }
+        }
+    }
+
+    fn bump_config_state_internal(env: &Env) {
+        let storage = env.storage().persistent();
+        storage.extend_ttl(&DataKey::Token, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::Admin, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::Treasury, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::Members, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::MinimumDeposit, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::WithdrawalFeeBps, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::TreasuryFeeBps, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::YieldEnabled, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::TotalBalance, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::Active, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::Paused, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::DeployedToYield, LEDGER_THRESHOLD, LEDGER_BUMP);
+
+        if storage.has(&DataKey::YieldStrategy) {
+            storage.extend_ttl(&DataKey::YieldStrategy, LEDGER_THRESHOLD, LEDGER_BUMP);
         }
     }
 
@@ -349,6 +430,15 @@ impl FlexiblePool {
             .persistent()
             .get(&DataKey::TotalBalance)
             .unwrap_or(0)
+    }
+
+    /// Decimals of the pool's token, recorded at initialize time. Defaults to 7
+    /// (native XLM) for pools created before multi-token support.
+    pub fn token_decimals(env: Env) -> u32 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::TokenDecimals)
+            .unwrap_or(7)
     }
 
     pub fn members(env: Env) -> Vec<Address> {

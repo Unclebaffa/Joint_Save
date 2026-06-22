@@ -19,7 +19,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { useStellar } from "@/components/web3-provider"
 import { usePoolData } from "@/lib/data-layer/PoolDataProvider"
 import {
-  stroopsToXlm,
+  formatTokenAmount,
   RotationalPoolState,
   TargetPoolState,
   FlexiblePoolState,
@@ -43,6 +43,8 @@ interface Pool {
   target_amount: number | null
   contribution_amount: number | null
   minimum_deposit: number | null
+  token_symbol?: string | null
+  token_decimals?: number | null
 }
 
 interface MyGroupsProps {
@@ -100,6 +102,9 @@ function PoolCard({ pool }: { pool: Pool }) {
       ? pool.contract_address
       : pool.id
   const { data, isLoading } = usePoolData(cacheKey)
+  const tokenSymbol = pool.token_symbol ?? "XLM"
+  const tokenDecimals = pool.token_decimals ?? 7
+  const fmt = (v: bigint) => formatTokenAmount(v, tokenDecimals)
 
   const getLiveStats = (): {
     totalSaved: number
@@ -124,18 +129,18 @@ function PoolCard({ pool }: { pool: Pool }) {
     }
     if (pool.type === "target" && onchain) {
       const s = onchain as TargetPoolState
-      const saved = stroopsToXlm(s.totalDeposited)
-      const target = pool.target_amount || stroopsToXlm(s.targetAmount) || 1
+      const saved = fmt(s.totalDeposited)
+      const target = pool.target_amount || fmt(s.targetAmount) || 1
       const progress = Math.min(100, Math.round((saved / target) * 100))
       return {
         totalSaved: saved,
         progress,
-        progressLabel: `${saved.toFixed(2)} / ${target.toFixed(2)} XLM`,
+        progressLabel: `${saved.toFixed(2)} / ${target.toFixed(2)} ${tokenSymbol}`,
       }
     }
     if (pool.type === "flexible" && onchain) {
       const s = onchain as FlexiblePoolState
-      const totalSaved = stroopsToXlm(s.totalBalance)
+      const totalSaved = fmt(s.totalBalance)
       const softGoal = (pool.minimum_deposit || 0) * (pool.members_count || 1)
       const progress =
         softGoal > 0
@@ -148,8 +153,8 @@ function PoolCard({ pool }: { pool: Pool }) {
         progress,
         progressLabel:
           softGoal > 0
-            ? `${totalSaved.toFixed(2)} / ${softGoal.toFixed(2)} XLM`
-            : `${totalSaved.toFixed(2)} XLM saved`,
+            ? `${totalSaved.toFixed(2)} / ${softGoal.toFixed(2)} ${tokenSymbol}`
+            : `${totalSaved.toFixed(2)} ${tokenSymbol} saved`,
       }
     }
     return {
@@ -160,7 +165,7 @@ function PoolCard({ pool }: { pool: Pool }) {
   }
 
   const { totalSaved, progress, progressLabel } = getLiveStats()
-  const formatXlm = (n: number) => `${n.toFixed(2)} XLM`
+  const formatXlm = (n: number) => `${n.toFixed(2)} ${tokenSymbol}`
 
   return (
     <motion.div variants={item}>

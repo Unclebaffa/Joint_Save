@@ -22,9 +22,13 @@ pub enum DataKey {
     Paused,
     HasDeposited(Address),
     ReputationTracker,
+    TokenDecimals,
 }
 
 // ── Contract ──────────────────────────────────────────────────────────────────
+
+const LEDGER_THRESHOLD: u32 = 518400;
+const LEDGER_BUMP: u32 = 2592000;
 
 #[contract]
 pub struct RotationalPool;
@@ -47,8 +51,13 @@ impl RotationalPool {
         assert!(deposit_amount > 0, "deposit must be > 0");
         assert!(round_duration > 0, "round_duration must be > 0");
 
+        // Validate the token is a real SEP-41 contract by reading its decimals
+        // (this call traps for a non-token address) and remember it for display.
+        let decimals = token::Client::new(&env, &token).decimals();
+
         let storage = env.storage().persistent();
         storage.set(&DataKey::Token, &token);
+        storage.set(&DataKey::TokenDecimals, &decimals);
         storage.set(&DataKey::Admin, &admin);
         storage.set(&DataKey::Treasury, &treasury);
         storage.set(&DataKey::Members, &members);
@@ -63,6 +72,7 @@ impl RotationalPool {
         );
         storage.set(&DataKey::Active, &true);
         storage.set(&DataKey::Paused, &false);
+        Self::bump_config_state_internal(&env);
     }
 
     /// Member deposits their fixed contribution for the current round.
@@ -90,10 +100,16 @@ impl RotationalPool {
         token_client.transfer(&member, &env.current_contract_address(), &deposit_amount);
 
         storage.set(&DataKey::HasDeposited(member.clone()), &true);
+        storage.extend_ttl(
+            &DataKey::HasDeposited(member.clone()),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
         env.events()
             .publish((symbol_short!("deposit"), member.clone()), deposit_amount);
 
         Self::report_deposit(&env, &member, deposit_amount);
+        Self::bump_config_state_internal(&env);
     }
 
     /// Trigger payout for the current round. Caller receives the relayer fee.
@@ -182,6 +198,7 @@ impl RotationalPool {
                 &(env.ledger().timestamp() + round_duration),
             );
         }
+        Self::bump_config_state_internal(&env);
     }
 
     pub fn add_member(env: Env, admin: Address, new_member: Address) {
@@ -211,6 +228,7 @@ impl RotationalPool {
         storage.set(&DataKey::Members, &members);
         env.events()
             .publish((symbol_short!("add_mem"), new_member), ());
+        Self::bump_config_state_internal(&env);
     }
 
     pub fn remove_member(env: Env, admin: Address, member: Address) {
@@ -259,6 +277,7 @@ impl RotationalPool {
         }
         storage.remove(&DataKey::HasDeposited(member.clone()));
         env.events().publish((symbol_short!("rem_mem"), member), ());
+        Self::bump_config_state_internal(&env);
     }
 
     // ── Emergency controls ─────────────────────────────────────────────────
@@ -270,6 +289,7 @@ impl RotationalPool {
         assert!(admin == stored_admin, "not admin");
         storage.set(&DataKey::Paused, &true);
         env.events().publish((symbol_short!("paused"),), ());
+        Self::bump_config_state_internal(&env);
     }
 
     pub fn unpause(env: Env, admin: Address) {
@@ -279,6 +299,7 @@ impl RotationalPool {
         assert!(admin == stored_admin, "not admin");
         storage.set(&DataKey::Paused, &false);
         env.events().publish((symbol_short!("unpaused"),), ());
+        Self::bump_config_state_internal(&env);
     }
 
     pub fn emergency_withdraw(env: Env, admin: Address, recipient: Address) {
@@ -304,6 +325,7 @@ impl RotationalPool {
 
         env.events()
             .publish((symbol_short!("emrg_wd"),), contract_balance);
+        Self::bump_config_state_internal(&env);
     }
 
     /// Point this pool at a deployed ReputationTracker contract so deposits,
@@ -315,6 +337,41 @@ impl RotationalPool {
         let members: Vec<Address> = storage.get(&DataKey::Members).unwrap();
         assert!(Self::is_member(&members, &caller), "not a member");
         storage.set(&DataKey::ReputationTracker, &tracker);
+        Self::bump_config_state_internal(&env);
+    }
+
+    pub fn bump_state(env: Env) {
+        Self::bump_config_state_internal(&env);
+        let storage = env.storage().persistent();
+        if storage.has(&DataKey::Members) {
+            let members: Vec<Address> = storage.get(&DataKey::Members).unwrap();
+            for member in members.iter() {
+                let key = DataKey::HasDeposited(member.clone());
+                if storage.has(&key) {
+                    storage.extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+                }
+            }
+        }
+    }
+
+    fn bump_config_state_internal(env: &Env) {
+        let storage = env.storage().persistent();
+        storage.extend_ttl(&DataKey::Token, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::Admin, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::Treasury, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::Members, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::DepositAmount, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::RoundDuration, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::TreasuryFeeBps, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::RelayerFeeBps, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::CurrentRound, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::NextPayoutTime, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::Active, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::Paused, LEDGER_THRESHOLD, LEDGER_BUMP);
+
+        if storage.has(&DataKey::ReputationTracker) {
+            storage.extend_ttl(&DataKey::ReputationTracker, LEDGER_THRESHOLD, LEDGER_BUMP);
+        }
     }
 
     // ── Views ──────────────────────────────────────────────────────────────
@@ -328,6 +385,15 @@ impl RotationalPool {
             .persistent()
             .get(&DataKey::Active)
             .unwrap_or(false)
+    }
+
+    /// Decimals of the pool's token, recorded at initialize time. Defaults to 7
+    /// (native XLM) for pools created before multi-token support.
+    pub fn token_decimals(env: Env) -> u32 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::TokenDecimals)
+            .unwrap_or(7)
     }
 
     pub fn is_paused(env: Env) -> bool {

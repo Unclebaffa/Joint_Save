@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use super::{FlexiblePool, FlexiblePoolClient};
-use soroban_sdk::{testutils::Address as _, token, Address, Env, Vec};
+use soroban_sdk::{testutils::{Address as _, Ledger as _, storage::Persistent}, token, Address, Env, Vec};
 
 fn setup_pool(
     env: &Env,
@@ -45,6 +45,15 @@ fn setup_pool(
 }
 
 // ── Original tests (updated for new initialize signature) ─────────────────────
+
+#[test]
+fn test_token_decimals_recorded() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _token, _admin, _treasury, _a, _b) = setup_pool(&env, false);
+    // SEP-41 decimals are validated at init and stored for display (SAC = 7)
+    assert_eq!(client.token_decimals(), 7);
+}
 
 #[test]
 #[should_panic(expected = "below minimum deposit")]
@@ -367,6 +376,66 @@ fn test_remove_member_fails_when_paused() {
     let (client, _token, admin, _treasury, member_a, _member_b) = setup_pool(&env, false);
     client.pause(&admin);
     client.remove_member(&admin, &member_a);
+}
+
+#[test]
+fn test_bump_state() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, FlexiblePool);
+    let client = FlexiblePoolClient::new(&env, &contract_id);
+
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let token_address = token_contract.address();
+
+    let admin = Address::generate(&env);
+    let treasury = Address::generate(&env);
+    let member_a = Address::generate(&env);
+    let member_b = Address::generate(&env);
+
+    let mut members = Vec::new(&env);
+    members.push_back(member_a.clone());
+    members.push_back(member_b.clone());
+
+    client.initialize(
+        &token_address,
+        &admin,
+        &members,
+        &10i128,
+        &0u32,
+        &false,
+        &treasury,
+        &0u32,
+    );
+
+    // Extend the contract instance TTL to prevent archiving when we advance sequence number
+    env.as_contract(&contract_id, || {
+        env.storage().instance().extend_ttl(3000000, 3000000);
+    });
+
+    // Advance sequence number to decrease TTL below LEDGER_THRESHOLD
+    env.ledger().set_sequence_number(2_100_000);
+
+    // Verify initial TTL is below threshold
+    env.as_contract(&contract_id, || {
+        let admin_ttl = env.storage().persistent().get_ttl(&super::DataKey::Admin);
+        let members_ttl = env.storage().persistent().get_ttl(&super::DataKey::Members);
+        assert!(admin_ttl < 518400);
+        assert!(members_ttl < 518400);
+    });
+
+    // Call bump_state
+    client.bump_state();
+
+    // Verify Admin and Members keys TTL were extended back to LEDGER_BUMP
+    env.as_contract(&contract_id, || {
+        let admin_ttl = env.storage().persistent().get_ttl(&super::DataKey::Admin);
+        let members_ttl = env.storage().persistent().get_ttl(&super::DataKey::Members);
+        assert!(admin_ttl >= 2592000);
+        assert!(members_ttl >= 2592000);
+    });
 }
 
 // ── Mock strategy ─────────────────────────────────────────────────────────────

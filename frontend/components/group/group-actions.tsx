@@ -31,7 +31,6 @@ import {
   useUnpausePool,
   useAddPoolMember,
   useRemovePoolMember,
-  stroopsToXlm,
   fetchRotationalState,
   fetchPoolMembers,
 } from "@/hooks/useJointSaveContracts";
@@ -112,7 +111,12 @@ export function GroupActions({
   const [newMember, setNewMember] = useState("");
   const [memberToRemove, setMemberToRemove] = useState<string | null>(null);
   const isPending = !poolAddress || poolAddress === "pending_deployment";
-  
+  // Token display metadata (persisted on the pool row; defaults to native XLM)
+  const tokenSymbol: string = poolData?.token_symbol ?? "XLM";
+  const tokenDecimals: number = poolData?.token_decimals ?? 7;
+  const toBaseUnits = (amount: number) =>
+    BigInt(Math.round(amount * 10 ** tokenDecimals));
+
   // Modal Preview states
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -144,11 +148,11 @@ export function GroupActions({
 
   const rotationalDeposit = useRotationalDeposit(poolAddress);
   const triggerPayout = useTriggerPayout(poolAddress);
-  const targetContribute = useTargetContribute(poolAddress, depositAmount);
+  const targetContribute = useTargetContribute(poolAddress, depositAmount, tokenDecimals);
   const targetWithdraw = useTargetWithdraw(poolAddress);
   const targetRefund = useTargetRefund(poolAddress);
-  const flexibleDeposit = useFlexibleDeposit(poolAddress, depositAmount);
-  const flexibleWithdraw = useFlexibleWithdraw(poolAddress, withdrawAmount);
+  const flexibleDeposit = useFlexibleDeposit(poolAddress, depositAmount, tokenDecimals);
+  const flexibleWithdraw = useFlexibleWithdraw(poolAddress, withdrawAmount, tokenDecimals);
   const pausePool = usePausePool(poolAddress);
   const unpausePool = useUnpausePool(poolAddress);
   const addPoolMember = useAddPoolMember(poolAddress);
@@ -184,7 +188,7 @@ export function GroupActions({
     try {
       const amount =
         poolType !== "rotational"
-          ? BigInt(Math.round(parseFloat(depositAmount) * 10_000_000))
+          ? toBaseUnits(parseFloat(depositAmount))
           : undefined;
       registerOptimistic("deposit", address, amount);
 
@@ -248,16 +252,16 @@ export function GroupActions({
         type: "withdraw",
         amount,
         details: [
-          { label: "Withdraw Amount", value: `${amount.toFixed(2)} XLM` },
+          { label: "Withdraw Amount", value: `${amount.toFixed(2)} ${tokenSymbol}` },
           {
             label: `Withdrawal Fee (${feePercent}%)`,
-            value: `-${feeAmount.toFixed(2)} XLM`,
+            value: `-${feeAmount.toFixed(2)} ${tokenSymbol}`,
             isDeduction: true,
           },
-          { label: "Net Amount You Receive", value: `${netAmount.toFixed(2)} XLM` },
+          { label: "Net Amount You Receive", value: `${netAmount.toFixed(2)} ${tokenSymbol}` },
         ],
         onConfirm: async () => {
-          const amountStroops = BigInt(Math.round(amount * 10_000_000));
+          const amountStroops = toBaseUnits(amount);
           registerOptimistic("withdraw", address, amountStroops);
           const txHash = await flexibleWithdraw.withdraw();
           if (txHash) {
@@ -320,23 +324,23 @@ export function GroupActions({
         details: [
           {
             label: "Total Collected (Depositors)",
-            value: `${totalCollected.toFixed(2)} XLM (${depositCount}/${members.length} paid)`,
+            value: `${totalCollected.toFixed(2)} ${tokenSymbol} (${depositCount}/${members.length} paid)`,
           },
           {
             label: `Treasury Fee (${treasuryPercent}%)`,
-            value: `-${treasuryCut.toFixed(2)} XLM`,
+            value: `-${treasuryCut.toFixed(2)} ${tokenSymbol}`,
             isDeduction: true,
           },
           {
             label: `Relayer Fee (${relayerPercent}%)`,
-            value: `-${relayerCut.toFixed(2)} XLM`,
+            value: `-${relayerCut.toFixed(2)} ${tokenSymbol}`,
             isDeduction: true,
           },
-          { label: "Net Recipient Payout", value: `${payoutAmount.toFixed(2)} XLM` },
+          { label: "Net Recipient Payout", value: `${payoutAmount.toFixed(2)} ${tokenSymbol}` },
           { label: "Beneficiary Address", value: shortAddress(beneficiary) },
           {
             label: "Your Relayer Reward (expected)",
-            value: `${relayerCut.toFixed(2)} XLM`,
+            value: `${relayerCut.toFixed(2)} ${tokenSymbol}`,
           },
         ],
         onConfirm: async () => {
@@ -555,8 +559,8 @@ export function GroupActions({
               {isRotational
                 ? "Deposit Fixed Amount"
                 : isTarget
-                  ? "Contribute Amount (XLM)"
-                  : "Deposit Amount (XLM)"}
+                  ? `Contribute Amount (${tokenSymbol})`
+                  : `Deposit Amount (${tokenSymbol})`}
             </Label>
             {!isRotational && (
               <Input
@@ -599,7 +603,7 @@ export function GroupActions({
           {!isRotational && (
             <div className="border-t border-border pt-6 space-y-3">
               <Label htmlFor="withdraw">
-                {isTarget ? "Withdraw Share" : "Withdraw Amount (XLM)"}
+                {isTarget ? "Withdraw Share" : `Withdraw Amount (${tokenSymbol})`}
               </Label>
               {isFlexible && (
                 <Input
