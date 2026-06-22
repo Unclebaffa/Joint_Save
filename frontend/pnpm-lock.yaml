@@ -107,6 +107,9 @@ importers:
       '@supabase/supabase-js':
         specifier: ^2.75.1
         version: 2.103.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
+      '@tailwindcss/oxide-win32-x64-msvc':
+        specifier: ^4.3.1
+        version: 4.3.1
       '@tanstack/react-query':
         specifier: ^5.90.5
         version: 5.99.0(react@19.2.5)
@@ -140,6 +143,9 @@ importers:
       input-otp:
         specifier: 1.4.1
         version: 1.4.1(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      lightningcss:
+        specifier: ^1.32.0
+        version: 1.32.0
       lucide-react:
         specifier: ^0.454.0
         version: 0.454.0(react@19.2.5)
@@ -2225,6 +2231,12 @@ packages:
 
   '@tailwindcss/oxide-win32-x64-msvc@4.2.2':
     resolution: {integrity: sha512-1T/37VvI7WyH66b+vqHj/cLwnCxt7Qt3WFu5Q8hk65aOvlwAhs7rAp1VkulBJw/N4tMirXjVnylTR72uI0HGcA==}
+    engines: {node: '>= 20'}
+    cpu: [x64]
+    os: [win32]
+
+  '@tailwindcss/oxide-win32-x64-msvc@4.3.1':
+    resolution: {integrity: sha512-xDEyu1rg290472FEGaKHnzyDyh5QH+AlWvsU5hMoMtPpzmKlRI0jaYKCgSHDYtaQWZOYbMaduSyCwFwY4n1HmA==}
     engines: {node: '>= 20'}
     cpu: [x64]
     os: [win32]
@@ -7158,6 +7170,8 @@ snapshots:
 
   '@tailwindcss/oxide-win32-x64-msvc@4.2.2':
     optional: true
+
+  '@tailwindcss/oxide-win32-x64-msvc@4.3.1': {}
 
   '@tailwindcss/oxide@4.2.2':
     optionalDependencies:

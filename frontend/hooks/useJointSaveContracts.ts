@@ -1087,3 +1087,58 @@ export async function fetchReputation(address: string): Promise<ReputationScore>
     return DEFAULT_REPUTATION
   }
 }
+
+export async function fetchPoolTtl(contractId: string): Promise<number | null> {
+  try {
+    const server = getRpc()
+    const ledgerKey = xdr.LedgerKey.contractData(
+      new xdr.LedgerKeyContractData({
+        contract: Address.fromString(normalizeId(contractId)).toScAddress(),
+        key: xdr.ScVal.scvVec([xdr.ScVal.scvSymbol("Admin")]),
+        durability: xdr.ContractDataDurability.persistent(),
+      })
+    )
+    const response = await server.getLedgerEntries(ledgerKey)
+    if (response.entries && response.entries.length > 0) {
+      const entry = response.entries[0]
+      if (entry && "liveUntilLedger" in entry) {
+        const liveUntilLedger = entry.liveUntilLedger as number
+        const latestLedgerResponse = await server.getLatestLedger()
+        const currentLedger = latestLedgerResponse.sequence
+        const ttlLedgers = liveUntilLedger - currentLedger
+        // ~17280 ledgers per day (5 seconds per ledger)
+        const days = Math.max(0, Math.floor(ttlLedgers / 17280))
+        return days
+      }
+    }
+  } catch (err) {
+    console.error("Error fetching pool TTL:", err)
+  }
+  return null
+}
+
+export function useBumpPoolState(contractId: string) {
+  const { kit, address } = useStellar()
+  const [isLoading, setIsLoading] = useState(false)
+
+  const bumpPoolState = async (): Promise<string | undefined> => {
+    if (!kit || !address || !contractId) return
+    setIsLoading(true)
+    try {
+      const account = await getRpc().getAccount(address)
+      const tx = new TransactionBuilder(account, {
+        fee: BASE_FEE,
+        networkPassphrase: STELLAR_NETWORK_PASSPHRASE,
+      })
+        .addOperation(new Contract(normalizeId(contractId)).call("bump_state"))
+        .setTimeout(TX_TIMEOUT)
+        .build()
+      return await submitTx(kit, tx)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return { bumpPoolState, isLoading }
+}
+

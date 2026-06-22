@@ -16,6 +16,9 @@ pub enum DataKey {
     Balance(Address),
 }
 
+const LEDGER_THRESHOLD: u32 = 518400;
+const LEDGER_BUMP: u32 = 2592000;
+
 #[contract]
 pub struct TargetPool;
 
@@ -44,6 +47,7 @@ impl TargetPool {
         storage.set(&DataKey::Active, &true);
         storage.set(&DataKey::Unlocked, &false);
         storage.set(&DataKey::Paused, &false);
+        Self::bump_config_state_internal(&env);
     }
 
     pub fn deposit(env: Env, member: Address, amount: i128) {
@@ -88,7 +92,9 @@ impl TargetPool {
         }
 
         env.events()
-            .publish((symbol_short!("deposit"), member), amount);
+            .publish((symbol_short!("deposit"), member.clone()), amount);
+        storage.extend_ttl(&DataKey::Balance(member), LEDGER_THRESHOLD, LEDGER_BUMP);
+        Self::bump_config_state_internal(&env);
     }
 
     /// Withdraw proportional share. Only allowed once target is reached.
@@ -118,6 +124,7 @@ impl TargetPool {
 
         env.events()
             .publish((symbol_short!("withdraw"), member), balance);
+        Self::bump_config_state_internal(&env);
     }
 
     /// Admin can close the pool and refund all members if deadline passed without reaching target.
@@ -152,6 +159,7 @@ impl TargetPool {
         storage.set(&DataKey::TotalDeposited, &0i128);
         storage.set(&DataKey::Active, &false);
         env.events().publish((symbol_short!("refunded"),), ());
+        Self::bump_config_state_internal(&env);
     }
 
     pub fn add_member(env: Env, admin: Address, new_member: Address) {
@@ -174,6 +182,7 @@ impl TargetPool {
         storage.set(&DataKey::Members, &members);
         env.events()
             .publish((symbol_short!("add_mem"), new_member), ());
+        Self::bump_config_state_internal(&env);
     }
 
     pub fn remove_member(env: Env, admin: Address, member: Address) {
@@ -217,6 +226,7 @@ impl TargetPool {
         storage.set(&DataKey::Members, &updated_members);
         env.events()
             .publish((symbol_short!("rem_mem"), member), balance);
+        Self::bump_config_state_internal(&env);
     }
 
     // ── Emergency controls ─────────────────────────────────────────────────
@@ -228,6 +238,7 @@ impl TargetPool {
         assert!(admin == stored_admin, "not admin");
         storage.set(&DataKey::Paused, &true);
         env.events().publish((symbol_short!("paused"),), ());
+        Self::bump_config_state_internal(&env);
     }
 
     pub fn unpause(env: Env, admin: Address) {
@@ -237,6 +248,7 @@ impl TargetPool {
         assert!(admin == stored_admin, "not admin");
         storage.set(&DataKey::Paused, &false);
         env.events().publish((symbol_short!("unpaused"),), ());
+        Self::bump_config_state_internal(&env);
     }
 
     pub fn emergency_withdraw(env: Env, admin: Address, recipient: Address) {
@@ -263,6 +275,34 @@ impl TargetPool {
         storage.set(&DataKey::TotalDeposited, &0i128);
         env.events()
             .publish((symbol_short!("emrg_wd"),), contract_balance);
+        Self::bump_config_state_internal(&env);
+    }
+
+    pub fn bump_state(env: Env) {
+        Self::bump_config_state_internal(&env);
+        let storage = env.storage().persistent();
+        if storage.has(&DataKey::Members) {
+            let members: Vec<Address> = storage.get(&DataKey::Members).unwrap();
+            for member in members.iter() {
+                let key = DataKey::Balance(member.clone());
+                if storage.has(&key) {
+                    storage.extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+                }
+            }
+        }
+    }
+
+    fn bump_config_state_internal(env: &Env) {
+        let storage = env.storage().persistent();
+        storage.extend_ttl(&DataKey::Token, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::Admin, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::Members, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::TargetAmount, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::Deadline, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::TotalDeposited, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::Active, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::Unlocked, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::Paused, LEDGER_THRESHOLD, LEDGER_BUMP);
     }
 
     // ── Views ──────────────────────────────────────────────────────────────

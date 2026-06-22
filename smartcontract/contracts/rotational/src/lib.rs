@@ -66,7 +66,7 @@ impl RotationalPool {
         );
         storage.set(&DataKey::Active, &true);
         storage.set(&DataKey::Paused, &false);
-        Self::bump_state(env.clone());
+        Self::bump_config_state_internal(&env);
     }
 
     /// Member deposits their fixed contribution for the current round.
@@ -94,11 +94,16 @@ impl RotationalPool {
         token_client.transfer(&member, &env.current_contract_address(), &deposit_amount);
 
         storage.set(&DataKey::HasDeposited(member.clone()), &true);
+        storage.extend_ttl(
+            &DataKey::HasDeposited(member.clone()),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
         env.events()
             .publish((symbol_short!("deposit"), member.clone()), deposit_amount);
 
         Self::report_deposit(&env, &member, deposit_amount);
-        Self::bump_state(env.clone());
+        Self::bump_config_state_internal(&env);
     }
 
     /// Trigger payout for the current round. Caller receives the relayer fee.
@@ -187,7 +192,7 @@ impl RotationalPool {
                 &(env.ledger().timestamp() + round_duration),
             );
         }
-        Self::bump_state(env.clone());
+        Self::bump_config_state_internal(&env);
     }
 
     pub fn add_member(env: Env, admin: Address, new_member: Address) {
@@ -217,7 +222,7 @@ impl RotationalPool {
         storage.set(&DataKey::Members, &members);
         env.events()
             .publish((symbol_short!("add_mem"), new_member), ());
-        Self::bump_state(env.clone());
+        Self::bump_config_state_internal(&env);
     }
 
     pub fn remove_member(env: Env, admin: Address, member: Address) {
@@ -266,7 +271,7 @@ impl RotationalPool {
         }
         storage.remove(&DataKey::HasDeposited(member.clone()));
         env.events().publish((symbol_short!("rem_mem"), member), ());
-        Self::bump_state(env.clone());
+        Self::bump_config_state_internal(&env);
     }
 
     // ── Emergency controls ─────────────────────────────────────────────────
@@ -278,7 +283,7 @@ impl RotationalPool {
         assert!(admin == stored_admin, "not admin");
         storage.set(&DataKey::Paused, &true);
         env.events().publish((symbol_short!("paused"),), ());
-        Self::bump_state(env.clone());
+        Self::bump_config_state_internal(&env);
     }
 
     pub fn unpause(env: Env, admin: Address) {
@@ -288,7 +293,7 @@ impl RotationalPool {
         assert!(admin == stored_admin, "not admin");
         storage.set(&DataKey::Paused, &false);
         env.events().publish((symbol_short!("unpaused"),), ());
-        Self::bump_state(env.clone());
+        Self::bump_config_state_internal(&env);
     }
 
     pub fn emergency_withdraw(env: Env, admin: Address, recipient: Address) {
@@ -314,7 +319,7 @@ impl RotationalPool {
 
         env.events()
             .publish((symbol_short!("emrg_wd"),), contract_balance);
-        Self::bump_state(env.clone());
+        Self::bump_config_state_internal(&env);
     }
 
     /// Point this pool at a deployed ReputationTracker contract so deposits,
@@ -326,51 +331,12 @@ impl RotationalPool {
         let members: Vec<Address> = storage.get(&DataKey::Members).unwrap();
         assert!(Self::is_member(&members, &caller), "not a member");
         storage.set(&DataKey::ReputationTracker, &tracker);
-        Self::bump_state(env.clone());
+        Self::bump_config_state_internal(&env);
     }
 
     pub fn bump_state(env: Env) {
+        Self::bump_config_state_internal(&env);
         let storage = env.storage().persistent();
-        if storage.has(&DataKey::Token) {
-            storage.extend_ttl(&DataKey::Token, LEDGER_THRESHOLD, LEDGER_BUMP);
-        }
-        if storage.has(&DataKey::Admin) {
-            storage.extend_ttl(&DataKey::Admin, LEDGER_THRESHOLD, LEDGER_BUMP);
-        }
-        if storage.has(&DataKey::Treasury) {
-            storage.extend_ttl(&DataKey::Treasury, LEDGER_THRESHOLD, LEDGER_BUMP);
-        }
-        if storage.has(&DataKey::Members) {
-            storage.extend_ttl(&DataKey::Members, LEDGER_THRESHOLD, LEDGER_BUMP);
-        }
-        if storage.has(&DataKey::DepositAmount) {
-            storage.extend_ttl(&DataKey::DepositAmount, LEDGER_THRESHOLD, LEDGER_BUMP);
-        }
-        if storage.has(&DataKey::RoundDuration) {
-            storage.extend_ttl(&DataKey::RoundDuration, LEDGER_THRESHOLD, LEDGER_BUMP);
-        }
-        if storage.has(&DataKey::TreasuryFeeBps) {
-            storage.extend_ttl(&DataKey::TreasuryFeeBps, LEDGER_THRESHOLD, LEDGER_BUMP);
-        }
-        if storage.has(&DataKey::RelayerFeeBps) {
-            storage.extend_ttl(&DataKey::RelayerFeeBps, LEDGER_THRESHOLD, LEDGER_BUMP);
-        }
-        if storage.has(&DataKey::CurrentRound) {
-            storage.extend_ttl(&DataKey::CurrentRound, LEDGER_THRESHOLD, LEDGER_BUMP);
-        }
-        if storage.has(&DataKey::NextPayoutTime) {
-            storage.extend_ttl(&DataKey::NextPayoutTime, LEDGER_THRESHOLD, LEDGER_BUMP);
-        }
-        if storage.has(&DataKey::Active) {
-            storage.extend_ttl(&DataKey::Active, LEDGER_THRESHOLD, LEDGER_BUMP);
-        }
-        if storage.has(&DataKey::Paused) {
-            storage.extend_ttl(&DataKey::Paused, LEDGER_THRESHOLD, LEDGER_BUMP);
-        }
-        if storage.has(&DataKey::ReputationTracker) {
-            storage.extend_ttl(&DataKey::ReputationTracker, LEDGER_THRESHOLD, LEDGER_BUMP);
-        }
-
         if storage.has(&DataKey::Members) {
             let members: Vec<Address> = storage.get(&DataKey::Members).unwrap();
             for member in members.iter() {
@@ -379,6 +345,26 @@ impl RotationalPool {
                     storage.extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
                 }
             }
+        }
+    }
+
+    fn bump_config_state_internal(env: &Env) {
+        let storage = env.storage().persistent();
+        storage.extend_ttl(&DataKey::Token, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::Admin, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::Treasury, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::Members, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::DepositAmount, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::RoundDuration, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::TreasuryFeeBps, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::RelayerFeeBps, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::CurrentRound, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::NextPayoutTime, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::Active, LEDGER_THRESHOLD, LEDGER_BUMP);
+        storage.extend_ttl(&DataKey::Paused, LEDGER_THRESHOLD, LEDGER_BUMP);
+
+        if storage.has(&DataKey::ReputationTracker) {
+            storage.extend_ttl(&DataKey::ReputationTracker, LEDGER_THRESHOLD, LEDGER_BUMP);
         }
     }
 

@@ -16,6 +16,7 @@ import {
   fetchFlexibleState,
   fetchIsPaused,
   fetchPoolAdmin,
+  fetchPoolTtl,
   type RotationalPoolState,
   type TargetPoolState,
   type FlexiblePoolState,
@@ -28,6 +29,7 @@ export interface PoolStateCache {
   onchain: RotationalPoolState | TargetPoolState | FlexiblePoolState | null
   isPaused: boolean
   poolAdmin: string | null
+  ttlDays: number | null
   lastFetched: number
   isLoading: boolean
   isStale: boolean
@@ -105,7 +107,7 @@ export function PoolDataProvider({ children }: { children: ReactNode }) {
 
   const setEntry = (contractId: string, patch: Partial<PoolStateCache>) => {
     const prev = cacheRef.current[contractId] ?? {
-      db: null, onchain: null, isPaused: false, poolAdmin: null, lastFetched: 0,
+      db: null, onchain: null, isPaused: false, poolAdmin: null, ttlDays: null, lastFetched: 0,
       isLoading: false, isStale: true, error: null,
     }
     cacheRef.current[contractId] = { ...prev, ...patch }
@@ -123,6 +125,7 @@ export function PoolDataProvider({ children }: { children: ReactNode }) {
         onchain: null,
         isPaused: false,
         poolAdmin: null,
+        ttlDays: null,
         lastFetched: 0, // stale intentionally so the hook triggers a background refresh
         isLoading: false,
         isStale: true,
@@ -176,6 +179,7 @@ export function PoolDataProvider({ children }: { children: ReactNode }) {
         let onchainState = null
         let isPaused = false
         let poolAdmin: string | null = null
+        let ttlDays: number | null = null
         const contractAddr: string = dbData?.contract_address ?? ""
         const isPending = !contractAddr || contractAddr === "pending_deployment"
 
@@ -193,11 +197,13 @@ export function PoolDataProvider({ children }: { children: ReactNode }) {
 
           promises.push(fetchIsPaused(contractAddr))
           promises.push(fetchPoolAdmin(contractAddr))
+          promises.push(fetchPoolTtl(contractAddr))
 
-          const [stateVal, pausedVal, adminVal] = await Promise.all(promises)
+          const [stateVal, pausedVal, adminVal, ttlVal] = await Promise.all(promises)
           onchainState = stateVal
           isPaused = pausedVal
           poolAdmin = adminVal
+          ttlDays = ttlVal
         }
 
         const fetchTime = Date.now()
@@ -206,6 +212,7 @@ export function PoolDataProvider({ children }: { children: ReactNode }) {
           onchain: onchainState,
           isPaused,
           poolAdmin,
+          ttlDays,
           lastFetched: fetchTime,
           isLoading: false,
           isStale: false,
@@ -453,7 +460,7 @@ export function usePoolData(contractId: string) {
 
   // Handle missing / pending pools gracefully
   if (!contractId || contractId === "pending_deployment") {
-    return { data: null, isLoading: false, isStale: false, isPaused: false, poolAdmin: null, error: null, refetch: async () => {} }
+    return { data: null, isLoading: false, isStale: false, isPaused: false, poolAdmin: null, ttlDays: null, error: null, refetch: async () => {} }
   }
 
   const entry = getCache(contractId)
@@ -466,6 +473,7 @@ export function usePoolData(contractId: string) {
     isStale: entry ? (entry.isStale || isStale) : false,
     isPaused: entry ? entry.isPaused : false,
     poolAdmin: entry ? entry.poolAdmin : null,
+    ttlDays: entry ? entry.ttlDays : null,
     error: entry ? entry.error : null,
     refetch,
   }

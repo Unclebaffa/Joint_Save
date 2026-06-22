@@ -13,6 +13,7 @@ import {
   RotationalPoolState,
   TargetPoolState,
   FlexiblePoolState,
+  useBumpPoolState,
 } from "@/hooks/useJointSaveContracts"
 import { usePoolData } from "@/lib/data-layer/PoolDataProvider"
 import { useToast } from "@/hooks/use-toast"
@@ -35,11 +36,40 @@ export function GroupDetails({ groupId, contractAddress }: GroupDetailsProps) {
       ? contractAddress
       : groupId;
 
-  const { data, isLoading, isStale, isPaused, error, refetch } =
+  const { data, isLoading, isStale, isPaused, ttlDays, error, refetch } =
     usePoolData(cacheKey);
   const { optimisticState } = useOptimisticTransactions(cacheKey);
+  const { bumpPoolState, isLoading: isBumping } = useBumpPoolState(
+    data?.db?.contract_address || ""
+  );
 
   const group = data?.db ?? null;
+
+  const handleExtendStorage = async () => {
+    try {
+      const txHash = await bumpPoolState()
+      if (txHash) {
+        toast({
+          title: "Storage Extended!",
+          description: "Pool storage lease has been successfully extended.",
+        })
+        refetch()
+      } else {
+        toast({
+          title: "Failed to extend storage",
+          description: "Could not extend storage. Please check your wallet connection.",
+          variant: "destructive",
+        })
+      }
+    } catch (err: any) {
+      console.error("Extend storage error:", err)
+      toast({
+        title: "Error extending storage",
+        description: err.message || "An unexpected error occurred.",
+        variant: "destructive",
+      })
+    }
+  }
   const onchainState = data?.onchain ?? null;
 
   const isPending = (addr: string) => !addr || addr === "pending_deployment";
@@ -312,6 +342,18 @@ export function GroupDetails({ groupId, contractAddress }: GroupDetailsProps) {
                   Live onchain
                 </Badge>
               )}
+              {ttlDays !== null && (
+                <Badge
+                  variant="outline"
+                  className={`text-xs ${
+                    ttlDays < 7
+                      ? "text-destructive border-destructive/40 bg-destructive/10"
+                      : ""
+                  }`}
+                >
+                  State expires in {ttlDays} days
+                </Badge>
+              )}
               {isStale && !isLoading && (
                 <Badge
                   variant="outline"
@@ -355,6 +397,26 @@ export function GroupDetails({ groupId, contractAddress }: GroupDetailsProps) {
               ⚠️ Pool Paused — All deposits and withdrawals are currently
               disabled.
             </span>
+          </div>
+        )}
+
+        {ttlDays !== null && ttlDays < 7 && !isPending(group.contract_address) && (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-lg bg-destructive/10 text-destructive mb-4 text-sm font-medium">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+              <span>
+                ⚠️ Pool storage is expiring soon (less than 7 days remaining). Please extend its storage life.
+              </span>
+            </div>
+            <Button
+              size="sm"
+              variant="destructive"
+              className="shrink-0 self-start sm:self-auto"
+              onClick={handleExtendStorage}
+              disabled={isBumping}
+            >
+              {isBumping ? "Extending..." : "Extend Storage"}
+            </Button>
           </div>
         )}
 
