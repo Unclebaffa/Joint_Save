@@ -18,6 +18,7 @@ import {
   LobstrModule,
 } from "@creit.tech/stellar-wallets-kit"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { setSigningKit } from "@/lib/tx-queue"
 
 // Create a single QueryClient instance
 const queryClient = new QueryClient({
@@ -116,6 +117,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
           ],
         })
     setKit(walletKit)
+    setSigningKit(walletKit)
 
     const savedAddress = localStorage.getItem("jointsave_address")
     const savedWalletId = localStorage.getItem("jointsave_wallet_id")

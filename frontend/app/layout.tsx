@@ -10,6 +10,7 @@ import { PoolDataProvider } from "@/lib/data-layer/PoolDataProvider"
 import "@/lib/env"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Suspense } from "react"
+import { TxQueueBadge } from "@/components/tx-queue-badge"
 
 export const metadata: Metadata = {
   title: "JointSave — Decentralized Community Savings on Stellar",
@@ -52,6 +53,7 @@ export default function RootLayout({
         </ThemeProvider>
         <Analytics />
         <Toaster />
+        <TxQueueBadge />
       </body>
     </html>
   )

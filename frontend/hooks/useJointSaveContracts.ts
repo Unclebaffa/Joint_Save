@@ -19,6 +19,7 @@ import {
   STELLAR_RPC_URL,
   STELLAR_NETWORK_PASSPHRASE,
 } from "@/components/web3-provider"
+import { enqueueSign } from "@/lib/tx-queue"
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -176,7 +177,7 @@ async function submitTx(kit: any, tx: any): Promise<string> {
 
   const preparedTx = rpc.assembleTransaction(tx, simResult).build()
 
-  const { signedTxXdr } = await kit.signTransaction(preparedTx.toXDR(), {
+  const { signedTxXdr } = await enqueueSign(preparedTx.toXDR(), {
     networkPassphrase: STELLAR_NETWORK_PASSPHRASE,
   })
 
@@ -245,7 +246,7 @@ export function useDeployPool() {
       }
 
       const preparedTx = rpc.assembleTransaction(tx, simResult).build()
-      const { signedTxXdr } = await kit.signTransaction(preparedTx.toXDR(), {
+      const { signedTxXdr } = await enqueueSign(preparedTx.toXDR(), {
         networkPassphrase: STELLAR_NETWORK_PASSPHRASE,
       })
 
