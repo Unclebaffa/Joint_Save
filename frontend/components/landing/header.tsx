@@ -62,6 +62,9 @@ export function Header() {
           </Link>
 
           <nav className="hidden md:flex items-center gap-8">
+            <Link href="/explore" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+              Explore
+            </Link>
             <Link href="#features" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
               Features
             </Link>

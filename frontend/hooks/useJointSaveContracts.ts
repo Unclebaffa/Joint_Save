@@ -1089,6 +1089,49 @@ export async function fetchIsPaused(contractId: string): Promise<boolean> {
   }
 }
 
+/** Parse Vec<BytesN<32>> from factory view calls into contract addresses. */
+function parseContractIdVec(val: xdr.ScVal): string[] {
+  try {
+    if (val.switch().name !== "scvVec") return []
+    return (val.vec() || [])
+      .map((entry: xdr.ScVal) => {
+        if (entry.switch().name !== "scvBytes") return null
+        const raw = entry.bytes() as Buffer
+        if (!raw || raw.length !== 32) return null
+        return StrKey.encodeContract(raw)
+      })
+      .filter((a: string | null): a is string => a !== null)
+  } catch {
+    return []
+  }
+}
+
+/** Fetch all pool contract addresses registered on the factory, grouped by type. */
+export async function fetchFactoryPools(): Promise<{
+  rotational: string[]
+  target: string[]
+  flexible: string[]
+}> {
+  const factoryId = FACTORY_ID
+  if (!factoryId) return { rotational: [], target: [], flexible: [] }
+
+  try {
+    const [rotVal, tgtVal, flxVal] = await Promise.all([
+      viewCall(factoryId, "all_rotational"),
+      viewCall(factoryId, "all_target"),
+      viewCall(factoryId, "all_flexible"),
+    ])
+    return {
+      rotational: parseContractIdVec(rotVal),
+      target: parseContractIdVec(tgtVal),
+      flexible: parseContractIdVec(flxVal),
+    }
+  } catch (err) {
+    console.error("Failed to fetch factory pools:", err)
+    return { rotational: [], target: [], flexible: [] }
+  }
+}
+
 export async function fetchPoolAdmin(contractId: string): Promise<string | null> {
   try {
     const val = await viewCall(contractId, "admin")

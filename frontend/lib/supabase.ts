@@ -171,6 +171,27 @@ export type Database = {
           created_at?: string
         }
       }
+      join_requests: {
+        Row: {
+          id: string
+          pool_id: string
+          requester_address: string
+          status: 'pending' | 'accepted' | 'declined'
+          created_at: string
+          responded_at: string | null
+          responder_id: string | null
+        }
+        Insert: {
+          pool_id: string
+          requester_address: string
+          status?: 'pending' | 'accepted' | 'declined'
+        }
+        Update: {
+          status?: 'pending' | 'accepted' | 'declined'
+          responded_at?: string | null
+          responder_id?: string | null
+        }
+      }
       pool_health_scores: {
         Row: {
           id: string

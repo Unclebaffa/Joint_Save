@@ -7,7 +7,7 @@ import { CreateGroup } from "@/components/dashboard/create-group"
 import { Transactions } from "@/components/dashboard/transactions"
 import { Profile } from "@/components/dashboard/profile"
 import { AnalyticsDashboard } from "@/components/dashboard/analytics"
-import { Home, PlusCircle, Receipt, User, TrendingUp } from "lucide-react"
+import { Home, PlusCircle, Receipt, User, TrendingUp, Compass } from "lucide-react"
 
 export function DashboardTabs({
   activeTab: controlledActiveTab,

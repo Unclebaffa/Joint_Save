@@ -71,6 +71,9 @@ export function DashboardHeader() {
             <span className="text-xs text-muted-foreground hidden md:block">
               Press <kbd className="rounded-sm border border-border bg-muted px-1 font-sans text-[10px] font-medium">?</kbd> for shortcuts
             </span>
+            <Button variant="ghost" size="sm" asChild className="hidden sm:flex">
+              <Link href="/explore">Explore</Link>
+            </Button>
             <ThemeToggle />
 
             {/* Notification bell — only shown when wallet is connected */}
