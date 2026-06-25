@@ -19,24 +19,19 @@ export function useNotifications(walletAddress: string | null) {
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [loading, setLoading] = useState(false)
 
-  const fetch = useCallback(async () => {
+  const loadNotifications = useCallback(async () => {
     if (!walletAddress || IS_E2E) { setNotifications([]); return }
     setLoading(true)
-    const { data } = await supabase
-      .from("notifications")
-      .select("id, pool_id, activity_type, message, read, created_at")
-      .eq("wallet_address", walletAddress.toLowerCase())
-      .order("created_at", { ascending: false })
-      .limit(10)
-    setNotifications((data as AppNotification[]) ?? [])
+    const res = await window.fetch(`/api/notifications?wallet=${encodeURIComponent(walletAddress.toLowerCase())}`)
+    const data = res.ok ? await res.json() : []
+    setNotifications(data)
     setLoading(false)
   }, [walletAddress])
 
   useEffect(() => {
-    fetch()
+    loadNotifications()
     if (!walletAddress || IS_E2E) return
 
-    // Real-time: prepend new notifications as they arrive
     const channel = supabase
       .channel(`notifications:${walletAddress}`)
       .on(
@@ -56,19 +51,19 @@ export function useNotifications(walletAddress: string | null) {
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
-  }, [walletAddress, fetch])
+  }, [walletAddress, loadNotifications])
 
   const markAllRead = useCallback(async () => {
     if (!walletAddress || IS_E2E) return
-    await supabase
-      .from("notifications")
-      .update({ read: true })
-      .eq("wallet_address", walletAddress.toLowerCase())
-      .eq("read", false)
+    await window.fetch("/api/notifications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ wallet_address: walletAddress.toLowerCase() }),
+    })
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
   }, [walletAddress])
 
   const unreadCount = notifications.filter((n) => !n.read).length
 
-  return { notifications, loading, unreadCount, markAllRead, refetch: fetch }
+  return { notifications, loading, unreadCount, markAllRead, refetch: loadNotifications }
 }

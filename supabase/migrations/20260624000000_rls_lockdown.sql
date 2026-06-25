@@ -1,237 +1,111 @@
 -- Migration: Full RLS lockdown across all Supabase tables
 -- Issue: #86 – database-backed RLS policies audit
--- Every table gets ENABLE ROW LEVEL SECURITY plus explicit policies.
--- Server-side paths (Edge Functions / API routes) use the service-role key
--- and are exempt from RLS by Postgres design.
-
--- Helper: extract wallet address from the JWT sub claim.
--- Used in every policy so we keep the pattern consistent.
+--
+-- Identity model: this app uses wallet addresses for identity, not Supabase Auth.
+-- All client-side code uses the anon key with no JWT claims.
+-- Writes to sensitive tables (user_profiles, notifications, pool_activity,
+-- pool_members, pool_daily_metrics, pool_health_scores, deposit_reminders)
+-- go through server-side Next.js API routes backed by the service-role key,
+-- which bypasses RLS by design.
+-- The policies below lock down direct anon-key access as a safety net.
 
 -- ============================================================
 -- pools
 -- ============================================================
 ALTER TABLE public.pools ENABLE ROW LEVEL SECURITY;
 
--- Public read (explore page works without a wallet)
+-- Public read — Explore page works without a wallet
 CREATE POLICY "pools_select_public"
   ON public.pools FOR SELECT
   USING (true);
 
--- Only the creator can insert their own pool
-CREATE POLICY "pools_insert_own"
-  ON public.pools FOR INSERT
-  WITH CHECK (
-    creator_address = current_setting('request.jwt.claims', true)::json->>'sub'
-  );
-
--- Only the creator can update
-CREATE POLICY "pools_update_own"
-  ON public.pools FOR UPDATE
-  USING (
-    creator_address = current_setting('request.jwt.claims', true)::json->>'sub'
-  );
-
--- Only the creator can delete
-CREATE POLICY "pools_delete_own"
-  ON public.pools FOR DELETE
-  USING (
-    creator_address = current_setting('request.jwt.claims', true)::json->>'sub'
-  );
+-- Writes go through /api/pools (service-role key); block direct anon writes
+-- No INSERT/UPDATE/DELETE policy = denied for anon/authenticated without service-role
 
 -- ============================================================
 -- pool_members
 -- ============================================================
 ALTER TABLE public.pool_members ENABLE ROW LEVEL SECURITY;
 
--- Members of the pool or the pool creator can read membership
-CREATE POLICY "pool_members_select"
+-- Public read — member lists are shown in pool detail views
+CREATE POLICY "pool_members_select_public"
   ON public.pool_members FOR SELECT
-  USING (
-    member_address = current_setting('request.jwt.claims', true)::json->>'sub'
-    OR EXISTS (
-      SELECT 1 FROM public.pools
-      WHERE pools.id = pool_members.pool_id
-        AND pools.creator_address = current_setting('request.jwt.claims', true)::json->>'sub'
-    )
-  );
+  USING (true);
 
--- INSERT / UPDATE / DELETE only via service-role key (no user-facing policy)
--- This means anon and authenticated users cannot write to pool_members.
+-- All writes are via service-role API routes only
 
 -- ============================================================
 -- pool_activity
 -- ============================================================
 ALTER TABLE public.pool_activity ENABLE ROW LEVEL SECURITY;
 
--- Pool members and creator can read activity
-CREATE POLICY "pool_activity_select"
+-- Public read — activity feeds are shown in pool detail views
+CREATE POLICY "pool_activity_select_public"
   ON public.pool_activity FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.pool_members
-      WHERE pool_members.pool_id = pool_activity.pool_id
-        AND pool_members.member_address = current_setting('request.jwt.claims', true)::json->>'sub'
-    )
-    OR EXISTS (
-      SELECT 1 FROM public.pools
-      WHERE pools.id = pool_activity.pool_id
-        AND pools.creator_address = current_setting('request.jwt.claims', true)::json->>'sub'
-    )
-  );
+  USING (true);
 
--- All writes are blocked for non-service-role callers (no INSERT/UPDATE/DELETE policy).
+-- All writes are via service-role Edge Functions only.
+-- No INSERT policy = anon callers cannot insert fake activity rows.
 
 -- ============================================================
 -- pool_daily_metrics
 -- ============================================================
 ALTER TABLE public.pool_daily_metrics ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "pool_daily_metrics_select"
+CREATE POLICY "pool_daily_metrics_select_public"
   ON public.pool_daily_metrics FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.pool_members
-      WHERE pool_members.pool_id = pool_daily_metrics.pool_id
-        AND pool_members.member_address = current_setting('request.jwt.claims', true)::json->>'sub'
-    )
-    OR EXISTS (
-      SELECT 1 FROM public.pools
-      WHERE pools.id = pool_daily_metrics.pool_id
-        AND pools.creator_address = current_setting('request.jwt.claims', true)::json->>'sub'
-    )
-  );
+  USING (true);
 
 -- ============================================================
 -- pool_health_scores
 -- ============================================================
 ALTER TABLE public.pool_health_scores ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "pool_health_scores_select"
+CREATE POLICY "pool_health_scores_select_public"
   ON public.pool_health_scores FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.pool_members
-      WHERE pool_members.pool_id = pool_health_scores.pool_id
-        AND pool_members.member_address = current_setting('request.jwt.claims', true)::json->>'sub'
-    )
-    OR EXISTS (
-      SELECT 1 FROM public.pools
-      WHERE pools.id = pool_health_scores.pool_id
-        AND pools.creator_address = current_setting('request.jwt.claims', true)::json->>'sub'
-    )
-  );
+  USING (true);
 
 -- ============================================================
 -- user_profiles
 -- ============================================================
 ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
 
--- Only the profile owner can read their own row
-CREATE POLICY "user_profiles_select_own"
-  ON public.user_profiles FOR SELECT
-  USING (
-    wallet_address = current_setting('request.jwt.claims', true)::json->>'sub'
-  );
-
-CREATE POLICY "user_profiles_insert_own"
-  ON public.user_profiles FOR INSERT
-  WITH CHECK (
-    wallet_address = current_setting('request.jwt.claims', true)::json->>'sub'
-  );
-
-CREATE POLICY "user_profiles_update_own"
-  ON public.user_profiles FOR UPDATE
-  USING (
-    wallet_address = current_setting('request.jwt.claims', true)::json->>'sub'
-  );
-
-CREATE POLICY "user_profiles_delete_own"
-  ON public.user_profiles FOR DELETE
-  USING (
-    wallet_address = current_setting('request.jwt.claims', true)::json->>'sub'
-  );
+-- No SELECT policy — direct anon reads are blocked.
+-- The app reads via /api/user-profile (service-role key).
+-- No INSERT/UPDATE/DELETE policy — all writes go through /api/user-profile.
 
 -- ============================================================
 -- notifications
 -- ============================================================
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "notifications_select_own"
-  ON public.notifications FOR SELECT
-  USING (
-    wallet_address = current_setting('request.jwt.claims', true)::json->>'sub'
-  );
-
--- Owner can mark notifications as read or delete them
-CREATE POLICY "notifications_update_own"
-  ON public.notifications FOR UPDATE
-  USING (
-    wallet_address = current_setting('request.jwt.claims', true)::json->>'sub'
-  );
-
-CREATE POLICY "notifications_delete_own"
-  ON public.notifications FOR DELETE
-  USING (
-    wallet_address = current_setting('request.jwt.claims', true)::json->>'sub'
-  );
-
--- INSERT is blocked for non-service-role callers (created by Edge Functions only).
+-- No SELECT policy — direct anon reads are blocked.
+-- The app reads via /api/notifications (service-role key).
+-- No INSERT/UPDATE/DELETE policy for anon callers.
+-- Realtime subscriptions (postgres_changes) still work via the anon key
+-- because Realtime uses its own channel-level security separate from RLS.
 
 -- ============================================================
--- join_requests  (drop old policies, replace with complete set)
+-- join_requests  (drop old incomplete policies, add full set)
 -- ============================================================
 ALTER TABLE public.join_requests ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Anyone can create join requests" ON public.join_requests;
 DROP POLICY IF EXISTS "Pool creator can view join requests" ON public.join_requests;
 
--- Requester can see their own requests; pool creator can see all requests for their pool
-CREATE POLICY "join_requests_select"
+-- Public read — requesters and creators both need to see requests;
+-- the app already filters server-side by poolId / requesterAddress
+CREATE POLICY "join_requests_select_public"
   ON public.join_requests FOR SELECT
-  USING (
-    requester_address = current_setting('request.jwt.claims', true)::json->>'sub'
-    OR EXISTS (
-      SELECT 1 FROM public.pools
-      WHERE pools.id = join_requests.pool_id
-        AND pools.creator_address = current_setting('request.jwt.claims', true)::json->>'sub'
-    )
-  );
+  USING (true);
 
--- Authenticated caller can only submit a request as themselves
-CREATE POLICY "join_requests_insert_own"
-  ON public.join_requests FOR INSERT
-  WITH CHECK (
-    requester_address = current_setting('request.jwt.claims', true)::json->>'sub'
-  );
-
--- Only the pool creator can accept/decline (prevents self-approval)
-CREATE POLICY "join_requests_update_creator"
-  ON public.join_requests FOR UPDATE
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.pools
-      WHERE pools.id = join_requests.pool_id
-        AND pools.creator_address = current_setting('request.jwt.claims', true)::json->>'sub'
-    )
-  );
-
--- Requester can withdraw their own pending request
-CREATE POLICY "join_requests_delete_own"
-  ON public.join_requests FOR DELETE
-  USING (
-    requester_address = current_setting('request.jwt.claims', true)::json->>'sub'
-  );
+-- Submitting a request goes through /api/join-requests (service-role key)
+-- No INSERT/UPDATE/DELETE policy for direct anon callers
 
 -- ============================================================
 -- deposit_reminders
 -- ============================================================
 ALTER TABLE public.deposit_reminders ENABLE ROW LEVEL SECURITY;
 
--- Owner can read their own reminders
-CREATE POLICY "deposit_reminders_select_own"
-  ON public.deposit_reminders FOR SELECT
-  USING (
-    wallet_address = current_setting('request.jwt.claims', true)::json->>'sub'
-  );
-
--- INSERT / UPDATE / DELETE only via service-role key (Edge Function).
+-- No policies — all access is via the send-deposit-reminders Edge Function
+-- using the service-role key.

@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { supabase } from "@/lib/supabase"
 
 const IS_E2E = process.env.NEXT_PUBLIC_E2E === "true"
 
@@ -36,27 +35,16 @@ export function useUserProfile(walletAddress: string | null) {
     if (!walletAddress || IS_E2E) {
       setProfile(
         walletAddress
-          ? {
-              wallet_address: walletAddress.toLowerCase(),
-              email: null,
-              notification_preferences: DEFAULT_PREFS,
-            }
+          ? { wallet_address: walletAddress.toLowerCase(), email: null, notification_preferences: DEFAULT_PREFS }
           : null
       )
       return
     }
     setLoading(true)
-    const { data } = await supabase
-      .from("user_profiles")
-      .select("wallet_address, email, notification_preferences")
-      .eq("wallet_address", walletAddress.toLowerCase())
-      .maybeSingle()
+    const res = await fetch(`/api/user-profile?wallet=${encodeURIComponent(walletAddress.toLowerCase())}`)
+    const data = res.ok ? await res.json() : null
     setProfile(
-      data ?? {
-        wallet_address: walletAddress.toLowerCase(),
-        email: null,
-        notification_preferences: DEFAULT_PREFS,
-      }
+      data ?? { wallet_address: walletAddress.toLowerCase(), email: null, notification_preferences: DEFAULT_PREFS }
     )
     setLoading(false)
   }, [walletAddress])
@@ -71,17 +59,12 @@ export function useUserProfile(walletAddress: string | null) {
         return
       }
       setSaving(true)
-      await supabase.from("user_profiles").upsert(
-        {
-          wallet_address: walletAddress.toLowerCase(),
-          ...updates,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "wallet_address" }
-      )
-      setProfile((prev) =>
-        prev ? { ...prev, ...updates } : null
-      )
+      await fetch("/api/user-profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ wallet_address: walletAddress.toLowerCase(), ...updates }),
+      })
+      setProfile((prev) => (prev ? { ...prev, ...updates } : null))
       setSaving(false)
     },
     [walletAddress]
