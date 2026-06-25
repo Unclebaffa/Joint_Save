@@ -15,6 +15,12 @@ import { useStellar } from "@/components/web3-provider";
 import { useRecentPools } from "@/hooks/useRecentPools";
 
 interface Pool {
+  id: string
+  name: string
+  type: 'rotational' | 'target' | 'flexible'
+  contract_address: string
+  token_address: string
+  creator_address: string
   id: string;
   name: string;
   type: "rotational" | "target" | "flexible";
@@ -117,6 +123,7 @@ export default function GroupPage({
               poolAddress={pool.contract_address}
               poolType={pool.type}
               tokenAddress={pool.token_address}
+              creatorAddress={pool.creator_address}
               isPaused={isPaused}
               poolAdmin={poolAdmin}
               onPauseChange={refreshPoolState}
