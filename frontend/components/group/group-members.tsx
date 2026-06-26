@@ -4,17 +4,21 @@ import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import {
   CheckCircle2,
   Clock,
   XCircle,
   AlertCircle,
   Award,
+  Copy,
+  Check,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { usePoolData } from "@/lib/data-layer/PoolDataProvider";
 import { useOptimisticTransactions } from "@/hooks/useOptimisticTransactions";
 import { RotationalPoolState, fetchReputation, type ReputationScore } from "@/hooks/useJointSaveContracts";
+import { useToast } from "@/hooks/use-toast";
 
 interface Member {
   id: string;
@@ -44,11 +48,24 @@ export function GroupMembers({
 
   const { data, isLoading } = usePoolData(cacheKey);
   const { optimisticState } = useOptimisticTransactions(cacheKey);
+  const { toast } = useToast();
 
   const members: Member[] = data?.db?.pool_members ?? [];
   const onchainState = data?.onchain;
 
   const [reputations, setReputations] = useState<Record<string, ReputationScore>>({});
+  const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
+
+  const handleCopyMemberAddress = async (address: string) => {
+    try {
+      await navigator.clipboard.writeText(address);
+      setCopiedAddress(address);
+      toast({ title: "Address copied", description: "Member address copied to clipboard." });
+      setTimeout(() => setCopiedAddress(null), 2500);
+    } catch {
+      toast({ title: "Failed to copy", description: "Please copy the address manually.", variant: "destructive" });
+    }
+  };
 
   useEffect(() => {
     if (members.length === 0) return;
@@ -138,9 +155,24 @@ export function GroupMembers({
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <p className="font-medium text-sm font-mono">
-                      {formatAddress(member.member_address)}
-                    </p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="font-medium text-sm font-mono">
+                        {formatAddress(member.member_address)}
+                      </p>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5 shrink-0"
+                        onClick={() => handleCopyMemberAddress(member.member_address)}
+                        aria-label="Copy member address"
+                      >
+                        {copiedAddress === member.member_address ? (
+                          <Check className="h-3 w-3 text-green-500" />
+                        ) : (
+                          <Copy className="h-3 w-3 text-muted-foreground" />
+                        )}
+                      </Button>
+                    </div>
                     <p className="text-xs text-muted-foreground">
                       {member.contribution_amount.toFixed(2)} XLM
                     </p>
