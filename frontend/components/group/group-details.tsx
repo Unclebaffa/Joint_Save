@@ -324,9 +324,14 @@ export function GroupDetails({ groupId, contractAddress }: GroupDetailsProps) {
     return { saved: group.total_saved || 0, target: group.target_amount || 0 };
   };
 
-  const stats = getLiveStats();
-  const progress = getProgress();
-  const targetDisplay = getTargetDisplay();
+const stats = getLiveStats();
+const progress = getProgress();
+const targetDisplay = getTargetDisplay();
+
+const LOW_MEMBER_THRESHOLD = 2;
+const hasLowMemberCount =
+  group.type === "rotational" &&
+  (group.members_count ?? 0) <= LOW_MEMBER_THRESHOLD;
 
   return (
     <motion.div
@@ -396,6 +401,16 @@ export function GroupDetails({ groupId, contractAddress }: GroupDetailsProps) {
         {group.description && (
           <p className="text-muted-foreground mb-6">{group.description}</p>
         )}
+
+        {hasLowMemberCount && (
+  <div className="flex items-center gap-2 p-3 rounded-lg bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 mb-4 text-sm font-medium">
+    <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+    <span>
+      This pool has very few members remaining — consider inviting more
+      members or planning for a shorter cycle.
+    </span>
+  </div>
+)}
 
         {isPaused && !isPending(group.contract_address) && (
           <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive mb-4 text-sm font-medium">
