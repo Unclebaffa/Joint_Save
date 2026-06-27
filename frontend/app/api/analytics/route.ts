@@ -5,9 +5,12 @@ import {
   predictTargetPoolCompletion,
   aggregateHistoricalData,
 } from '@/lib/analytics'
+import { readLimiter } from '@/lib/rate-limit'
 
 export async function GET(req: NextRequest) {
   try {
+    const limited = readLimiter(req)
+    if (limited) return limited
     const poolId = req.nextUrl.searchParams.get('poolId')
     const userAddress = req.nextUrl.searchParams.get('userAddress')
     const isDev = process.env.NODE_ENV === 'development'

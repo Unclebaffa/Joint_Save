@@ -13,6 +13,7 @@ import { TokenSelect, type SelectedToken } from "@/components/create-group/token
 import { FieldTooltip } from "@/components/ui/field-tooltip"
 import { FieldError } from "@/components/ui/form"
 import { FormProgress, type ProgressField } from "@/components/ui/form-progress"
+import BulkImport from "@/components/create-group/BulkImport"
 import {
   validateGroupName,
   validateStellarAddress,
