@@ -1,7 +1,10 @@
 import { getAdminClient } from '@/lib/supabase-admin'
 import { NextRequest, NextResponse } from 'next/server'
+import { readLimiter, writeLimiter } from '@/lib/rate-limit'
 
 export async function GET(req: NextRequest) {
+  const limited = readLimiter(req)
+    if (limited) return limited
   const wallet = req.nextUrl.searchParams.get('wallet')?.toLowerCase()
   if (!wallet) return NextResponse.json({ error: 'wallet required' }, { status: 400 })
 
@@ -16,6 +19,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const limited = writeLimiter(req)
+    if (limited) return limited
   const body = await req.json()
   const { wallet_address, ...updates } = body
   if (!wallet_address) return NextResponse.json({ error: 'wallet_address required' }, { status: 400 })

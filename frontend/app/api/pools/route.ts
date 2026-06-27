@@ -1,8 +1,11 @@
 import { supabase, savePoolToDatabase } from '@/lib/supabase'
 import { NextRequest, NextResponse } from 'next/server'
+import { readLimiter, writeLimiter } from '@/lib/rate-limit'
 
 export async function POST(req: NextRequest) {
   try {
+    const limited = writeLimiter(req)
+    if (limited) return limited
     const body = await req.json()
 
     const {
@@ -87,6 +90,8 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
+    const limited = readLimiter(req)
+    if (limited) return limited
     const poolId = req.nextUrl.searchParams.get('id')
     const creatorAddress = req.nextUrl.searchParams.get('creator')
     const contractAddress = req.nextUrl.searchParams.get('contract')
@@ -218,6 +223,8 @@ export async function GET(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
+    const limited = writeLimiter(req)
+    if (limited) return limited
     const body = await req.json()
     const poolId = req.nextUrl.searchParams.get('id') || body.id
 
