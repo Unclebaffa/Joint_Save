@@ -28,6 +28,7 @@ import { useStellar } from "@/components/web3-provider"
 import { fetchFactoryPools } from "@/hooks/useJointSaveContracts"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
+import { useDebouncedValue } from "@/hooks/use-debounced-value"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -197,6 +198,8 @@ function ExploreContent() {
   const search = searchParams.get("search") || ""
   const filterType = searchParams.get("type") || ""
   const filterStatus = searchParams.get("status") || ""
+  const [searchInput, setSearchInput] = useState(search)
+  const debouncedSearchInput = useDebouncedValue(searchInput, 300)
 
   // Sync a single filter to the URL query string. router.replace (not push)
   // keeps the back button from stepping through every individual filter toggle.
@@ -217,6 +220,16 @@ function ExploreContent() {
   const setSearch = useCallback((v: string) => updateParam("search", v), [updateParam])
   const setFilterType = useCallback((v: string) => updateParam("type", v), [updateParam])
   const setFilterStatus = useCallback((v: string) => updateParam("status", v), [updateParam])
+
+  useEffect(() => {
+    setSearchInput(search)
+  }, [search])
+
+  useEffect(() => {
+    if (debouncedSearchInput !== search) {
+      setSearch(debouncedSearchInput)
+    }
+  }, [debouncedSearchInput, search, setSearch])
 
   // Fetch pools from DB + factory
   useEffect(() => {
@@ -324,8 +337,8 @@ function ExploreContent() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search by pool name..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               className="pl-9"
             />
           </div>
