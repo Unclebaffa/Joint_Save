@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect, useMemo, useCallback } from "react"
+import { useState, useEffect, useMemo, useCallback, Suspense } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -181,18 +182,41 @@ function PoolCard({
 
 // ── Explore Page ──────────────────────────────────────────────────────────────
 
-export default function ExplorePage() {
+function ExploreContent() {
   const { address } = useStellar()
   const { toast } = useToast()
+  const router = useRouter()
+  const searchParams = useSearchParams()
 
   const [pools, setPools] = useState<Pool[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [joining, setJoining] = useState<string | null>(null)
 
-  const [search, setSearch] = useState("")
-  const [filterType, setFilterType] = useState("")
-  const [filterStatus, setFilterStatus] = useState("")
+  // Filter state is derived from the URL so it survives refresh and can be shared.
+  const search = searchParams.get("search") || ""
+  const filterType = searchParams.get("type") || ""
+  const filterStatus = searchParams.get("status") || ""
+
+  // Sync a single filter to the URL query string. router.replace (not push)
+  // keeps the back button from stepping through every individual filter toggle.
+  const updateParam = useCallback(
+    (key: string, value: string) => {
+      const params = new URLSearchParams(searchParams.toString())
+      if (value) {
+        params.set(key, value)
+      } else {
+        params.delete(key)
+      }
+      const qs = params.toString()
+      router.replace(qs ? `?${qs}` : "?", { scroll: false })
+    },
+    [router, searchParams]
+  )
+
+  const setSearch = useCallback((v: string) => updateParam("search", v), [updateParam])
+  const setFilterType = useCallback((v: string) => updateParam("type", v), [updateParam])
+  const setFilterStatus = useCallback((v: string) => updateParam("status", v), [updateParam])
 
   // Fetch pools from DB + factory
   useEffect(() => {
@@ -384,5 +408,29 @@ export default function ExplorePage() {
         )}
       </div>
     </div>
+  )
+}
+
+// Loading fallback shown while useSearchParams resolves on the client.
+function ExploreFallback() {
+  return (
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <PoolCardSkeleton key={i} />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// useSearchParams requires a Suspense boundary at the page level.
+export default function ExplorePage() {
+  return (
+    <Suspense fallback={<ExploreFallback />}>
+      <ExploreContent />
+    </Suspense>
   )
 }
