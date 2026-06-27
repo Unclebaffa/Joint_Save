@@ -299,7 +299,7 @@ export function GroupActivity({
                   )}
 
                   {activity.tx_hash ? (
-                    
+                    <a
                       href={`https://stellar.expert/explorer/testnet/tx/${activity.tx_hash}`}
                       target="_blank"
                       rel="noopener noreferrer"
