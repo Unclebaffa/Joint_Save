@@ -41,6 +41,7 @@ import {
   BarChart,
   Bar,
 } from "recharts"
+import { buildCsv, downloadCsv } from "@/lib/csv-export"
 
 interface AnalyticsData {
   totalPools: number
@@ -141,29 +142,23 @@ export function AnalyticsDashboard() {
 
   // Export to CSV Function
   const handleExportCSV = () => {
-    let csvContent = "data:text/csv;charset=utf-8,"
     const headers = ["Date", "Cumulative Deposits (XLM)", "Cumulative Withdrawals (XLM)", "Net Savings/Balance (XLM)"]
-    csvContent += headers.join(",") + "\n"
-
     const dataPoints = selectedPoolId === "overview"
       ? generalData?.globalChartData || []
       : poolData?.chartData || []
 
-    dataPoints.forEach((point) => {
-      const row = [point.date, point.deposits, point.withdrawals, point.balance]
-      csvContent += row.join(",") + "\n"
-    })
+    const rows = dataPoints.map((point) => [
+      point.date,
+      point.deposits,
+      point.withdrawals,
+      point.balance,
+    ])
 
-    const encodedUri = encodeURI(csvContent)
-    const link = document.createElement("a")
-    link.setAttribute("href", encodedUri)
     const filename = selectedPoolId === "overview"
       ? "jointsave_portfolio_analytics.csv"
       : `jointsave_pool_${selectedPoolId}_analytics.csv`
-    link.setAttribute("download", filename)
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+    const csv = buildCsv(headers, rows)
+    downloadCsv(csv, filename)
   }
 
   if (!address) {
