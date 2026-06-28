@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { AlertCircle, X } from "lucide-react";
 import Papa from "papaparse";
 import { isValidStellarAddress } from "@/utils/stellarAddress";
+import { MAX_POOL_MEMBERS } from "@/lib/constants";
 
 type Member = {
   address: string;
@@ -23,8 +24,6 @@ type BulkImportProps = {
 export default function BulkImport({ onMembersChange }: BulkImportProps) {
   const [members, setMembers] = useState<Member[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
-
-  const MAX_MEMBERS = 50;
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -49,12 +48,13 @@ export default function BulkImport({ onMembersChange }: BulkImportProps) {
           }
           parsed.push({ address, name, line: lineNum });
         });
-        if (parsed.length > MAX_MEMBERS) {
-          errorLines.push(`Too many members (${parsed.length}). The maximum allowed is ${MAX_MEMBERS}.`);
+        if (parsed.length > MAX_POOL_MEMBERS) {
+          errorLines.push(`Too many members (${parsed.length}). The maximum allowed is ${MAX_POOL_MEMBERS}.`);
         }
-        setMembers(parsed);
+        const acceptedMembers = parsed.slice(0, MAX_POOL_MEMBERS);
+        setMembers(acceptedMembers);
         setErrors(errorLines);
-        onMembersChange(parsed.map((m) => m.address));
+        onMembersChange(acceptedMembers.map((m) => m.address));
       },
       error: (err) => {
         setErrors([`Parsing error: ${err.message}`]);

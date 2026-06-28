@@ -21,6 +21,7 @@ import {
   validatePositiveAmount,
 } from "@/lib/form-validation"
 import type { DuplicatePrefill } from "@/app/dashboard/create/[type]/page"
+import { MAX_POOL_MEMBERS } from "@/lib/constants"
 
 function isValidStellarAddress(addr: string) {
   return /^G[A-Z2-7]{55}$/.test(addr)
@@ -76,6 +77,7 @@ export function RotationalForm({ prefill }: { prefill?: DuplicatePrefill }) {
   const allMembers = address ? [address, ...members] : members
   const validMembers = Array.from(new Set(allMembers.filter(isValidStellarAddress)))
   const isCreating = step !== "idle"
+  const isMemberLimitReached = members.length >= MAX_POOL_MEMBERS
 
   const validateField = useCallback((name: keyof FieldErrors, value: string) => {
     const result =
@@ -103,6 +105,7 @@ export function RotationalForm({ prefill }: { prefill?: DuplicatePrefill }) {
   }
 
   const addMember = () => {
+    if (isMemberLimitReached) return
     setMembers([...members, ""])
     setMemberErrors([...memberErrors, ""])
   }
@@ -330,10 +333,22 @@ export function RotationalForm({ prefill }: { prefill?: DuplicatePrefill }) {
             tooltip="Add the public Stellar address (starts with G) for each person joining this pool. You are automatically included as the first member."
             required
           />
-          <Button type="button" variant="outline" size="sm" onClick={addMember}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={addMember}
+            disabled={isMemberLimitReached}
+            aria-describedby={isMemberLimitReached ? "rotational-member-limit" : undefined}
+          >
             <Plus className="h-4 w-4 mr-1" />Add Member
           </Button>
         </div>
+        {isMemberLimitReached && (
+          <p id="rotational-member-limit" className="text-xs text-muted-foreground">
+            Maximum of {MAX_POOL_MEMBERS} members reached
+          </p>
+        )}
 
         <div className="space-y-3">
           {/* Creator — always included, read-only */}
