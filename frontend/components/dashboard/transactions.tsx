@@ -10,6 +10,7 @@ import { useState, useEffect, useMemo } from "react"
 import { supabase } from "@/lib/supabase"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { formatRelativeTime, formatExactDateTime } from "@/lib/utils"
+import { buildCsv, downloadCsv } from "@/lib/csv-export"
 
 interface Activity {
   id: string
@@ -22,6 +23,7 @@ interface Activity {
   tx_hash: string | null
   pool_name: string | null
   pool_type: string | null
+  token_symbol: string | null
 }
 
 export function Transactions() {
@@ -41,7 +43,7 @@ export function Transactions() {
           .from("pool_activity")
           .select(`
             *,
-            pools ( name, type )
+            pools ( name, type, token_symbol )
           `)
           .order("created_at", { ascending: false })
           .limit(500)
@@ -52,6 +54,7 @@ export function Transactions() {
           ...row,
           pool_name: row.pools?.name ?? null,
           pool_type: row.pools?.type ?? null,
+          token_symbol: row.pools?.token_symbol ?? null,
         }))
         setActivities(rows)
       } catch (err) {
@@ -88,27 +91,18 @@ export function Transactions() {
   }, [activities, dateFrom, dateTo, poolFilter, typeFilter])
 
   const exportCSV = () => {
-    const header = ["Date", "Pool Name", "Pool Type", "Activity Type", "Amount", "Transaction Hash"]
+    const headers = ["Date", "Pool Name", "Pool Type", "Activity Type", "Amount", "Transaction Hash"]
     const rows = filtered.map((a) => [
-      new Date(a.created_at).toLocaleDateString(),
+      new Date(a.created_at).toISOString().slice(0, 10),
       a.pool_name ?? "",
       a.pool_type ?? "",
       a.activity_type,
-      a.amount != null ? a.amount.toFixed(2) : "",
+      a.amount != null ? `${a.amount.toFixed(2)} ${a.token_symbol ?? "XLM"}` : "",
       a.tx_hash ?? "",
     ])
 
-    const csv = [header, ...rows]
-      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
-      .join("\n")
-
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `transactions-${new Date().toISOString().slice(0, 10)}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+    const csv = buildCsv(headers, rows)
+    downloadCsv(csv, `transactions-${new Date().toISOString().slice(0, 10)}.csv`)
   }
 
   if (loading) {
