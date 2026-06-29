@@ -17,15 +17,15 @@ export interface AuditRow {
 }
 
 /**
- * GET /api/admin/audit-log?poolId=<id>
+ * GET /api/admin/audit-log?poolId=<id>&callerAddress=<address>
  *
  * Returns all pool_activity rows for the given pool together with a
  * per-pool consistency flag: `inconsistent` is true when the pool's
  * recorded `total_saved` diverges from the sum of deposit/withdrawal
  * activity rows by more than 0.01 (floating-point tolerance).
  *
- * Only the pool creator should call this route; the component enforces
- * that guard on the client side.  A missing poolId returns 400.
+ * The caller's wallet address is verified server-side against the
+ * pool's `creator_address` before any data is returned.
  */
 export async function GET(req: NextRequest) {
   const limited = readLimiter(req)
@@ -36,14 +36,24 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "poolId is required" }, { status: 400 })
   }
 
+  const callerAddress = req.nextUrl.searchParams.get("callerAddress")
+  if (!callerAddress) {
+    return NextResponse.json({ error: "callerAddress is required" }, { status: 400 })
+  }
+
   const { data: pool, error: poolErr } = await supabase
     .from("pools")
-    .select("id, name, total_saved")
+    .select("id, name, total_saved, creator_address")
     .eq("id", poolId)
     .single()
 
   if (poolErr || !pool) {
     return NextResponse.json({ error: "Pool not found" }, { status: 404 })
+  }
+
+  // Server-side authorization: reject if caller is not the pool creator
+  if (callerAddress.toLowerCase() !== pool.creator_address.toLowerCase()) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
   const { data: activity, error: actErr } = await supabase

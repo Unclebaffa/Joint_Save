@@ -39,8 +39,11 @@ export function AdminAuditLog({ groupId, creatorAddress }: AdminAuditLogProps) {
   useEffect(() => {
     if (!isCreator) return
     setLoading(true)
-    fetch(`/api/admin/audit-log?poolId=${groupId}`)
-      .then((r) => r.json())
+    fetch(`/api/admin/audit-log?poolId=${groupId}&callerAddress=${address}`)
+      .then((r) => {
+        if (r.status === 403) throw new Error("You are not authorized to view this audit log")
+        return r.json()
+      })
       .then((data) => {
         if (data.error) throw new Error(data.error)
         setRows(data.rows)
@@ -50,7 +53,7 @@ export function AdminAuditLog({ groupId, creatorAddress }: AdminAuditLogProps) {
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
-  }, [isCreator, groupId])
+  }, [isCreator, groupId, address])
 
   if (!isCreator) return null
 
